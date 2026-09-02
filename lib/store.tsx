@@ -19,11 +19,12 @@ function read<T>(key: string, fallback: T): T {
     return fallback;
   }
 }
-function write(key: string, val: unknown) {
+function write(key: string, val: unknown): boolean {
   try {
     window.localStorage.setItem(key, JSON.stringify(val));
+    return true;
   } catch {
-    /* storage full / unavailable */
+    return false; // storage full / unavailable
   }
 }
 
@@ -119,21 +120,21 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         builtin: false,
         createdAt: Date.now(),
       };
-      setState((s) => {
-        const custom = [...s.custom, created];
-        write(KEYS.custom, custom);
-        return { ...s, custom };
-      });
+      const custom = [...state.custom, created];
+      if (!write(KEYS.custom, custom)) {
+        throw new Error("Storage full — game was not saved");
+      }
+      setState((s) => ({ ...s, custom }));
       return created;
     },
     updateCustomGame: (id, patch) => {
-      setState((s) => {
-        const custom = s.custom.map((g) =>
-          g.id === id ? { ...g, ...patch, id, builtin: false } : g
-        );
-        write(KEYS.custom, custom);
-        return { ...s, custom };
-      });
+      const custom = state.custom.map((g) =>
+        g.id === id ? { ...g, ...patch, id, builtin: false } : g
+      );
+      if (!write(KEYS.custom, custom)) {
+        throw new Error("Storage full — changes were not saved");
+      }
+      setState((s) => ({ ...s, custom }));
     },
     removeCustomGame: (id) => {
       setState((s) => {
