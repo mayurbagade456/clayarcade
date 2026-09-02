@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<title>⚡ Circuit Puzzle</title>
+<script type="application/json" id="game-help">
+{
+  "goal": "Rotate wire tiles to connect the ⚡ power source to every 💡 light bulb. All bulbs must be lit at the same time to clear each of the 10 levels.",
+  "controls": [
+    { "keys": "Click / tap tile", "action": "Rotate a wire tile 90° clockwise" },
+    { "keys": "Level dots", "action": "Jump to any level" }
+  ],
+  "tips": [
+    "Yellow source and bulb tiles are fixed and can't be rotated.",
+    "Power only flows between two tiles when both sides face each other — a single gap breaks the circuit.",
+    "T-Junctions split power three ways; Cross tiles connect all four directions at once.",
+    "Fewer moves and less time earn a higher star rating."
+  ]
+}
+</script>
+<style>
+/* ═══════════════════════════════════════════
+   RESET & VARIABLES
+═══════════════════════════════════════════ */
+:root{
+  --bg:#0a0e1a;
+  --panel:#0f1628;
+  --border:rgba(0,200,255,0.12);
+  --cyan:#00c8ff;
+  --green:#00ff88;
+  --yellow:#ffd700;
+  --red:#ff4466;
+  --purple:#cc44ff;
+  --dim:#1a2540;
+  --text:#c8d8f0;
+  --tile:52px;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;overflow:hidden;}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:'Segoe UI',system-ui,sans-serif;
+  display:flex;flex-direction:column;
+  align-items:center;
+  height:100%;
+  overflow:hidden;
+}
+
+/* ═══════════════════════════════════════════
+   HEADER
+═══════════════════════════════════════════ */
+#header{
+  width:100%;max-width:900px;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 16px 6px;
+  flex-shrink:0;
+}
+#title{
+  font-size:clamp(16px,3vw,22px);
+  font-weight:900;letter-spacing:2px;
+  background:linear-gradient(135deg,var(--cyan),var(--green));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+#stats{display:flex;gap:12px;align-items:center;}
+.stat{
+  display:flex;flex-direction:column;align-items:center;
+  background:rgba(0,200,255,0.06);
+  border:1px solid var(--border);
+  border-radius:10px;padding:4px 10px;
+}
+.stat-lbl{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,0.35);}
+.stat-val{font-size:16px;font-weight:800;color:#fff;font-family:monospace;}
+#timer-val{color:var(--green);}
+#moves-val{color:var(--yellow);}
+#level-val{color:var(--cyan);}
+
+/* ═══════════════════════════════════════════
+   LEVEL PROGRESS BAR
+═══════════════════════════════════════════ */
+#progress-wrap{
+  width:100%;max-width:900px;
+  padding:0 16px 6px;
+  flex-shrink:0;
+}
+#progress-track{
+  height:4px;background:rgba(255,255,255,0.07);
+  border-radius:2px;overflow:hidden;
+}
+#progress-fill{
+  height:100%;
+  background:linear-gradient(90deg,var(--cyan),var(--green));
+  border-radius:2px;
+  transition:width .5s ease;
+}
+#level-dots{
+  display:flex;gap:6px;margin-top:6px;justify-content:center;flex-wrap:wrap;
+}
+.ldot{
+  width:28px;height:5px;border-radius:3px;
+  background:rgba(255,255,255,0.1);
+  cursor:pointer;transition:all .2s;
+}
+.ldot.done{background:var(--green);}
+.ldot.current{background:var(--cyan);box-shadow:0 0 8px var(--cyan);}
+.ldot:hover{opacity:.8;transform:scaleY(1.5);}
+
+/* ═══════════════════════════════════════════
+   MAIN LAYOUT
+═══════════════════════════════════════════ */
+#main{
+  display:flex;
+  gap:14px;
+  align-items:flex-start;
+  justify-content:center;
+  flex:1;
+  width:100%;
+  max-width:900px;
+  padding:0 12px 10px;
+  overflow:hidden;
+  min-height:0;
+}
+
+/* ═══════════════════════════════════════════
+   GRID AREA
+═══════════════════════════════════════════ */
+#grid-wrap{
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  flex:1;min-width:0;height:100%;
+}
+#grid{
+  display:inline-grid;
+  gap:3px;
+  padding:10px;
+  background:rgba(0,200,255,0.04);
+  border:1px solid var(--border);
+  border-radius:16px;
+  box-shadow:0 0 40px rgba(0,200,255,0.06),inset 0 0 30px rgba(0,0,0,0.3);
+  touch-action:none;
+  max-width:100%;
+  max-height:100%;
+}
+
+/* ═══════════════════════════════════════════
+   TILES
+═══════════════════════════════════════════ */
+.tile{
+  width:var(--tile);height:var(--tile);
+  position:relative;
+  cursor:pointer;
+  border-radius:8px;
+  background:var(--dim);
+  border:1px solid rgba(0,200,255,0.08);
+  transition:background .15s,box-shadow .15s,transform .08s;
+  overflow:hidden;
+  user-select:none;
+}
+.tile:hover{
+  background:#1e2d4a;
+  transform:scale(1.04);
+  z-index:2;
+}
+.tile.powered{
+  background:#0d1f35;
+  border-color:rgba(0,200,255,0.35);
+  box-shadow:0 0 14px rgba(0,200,255,0.15);
+}
+.tile.fixed{cursor:default;}
+.tile.fixed:hover{transform:none;}
+.tile.win-flash{animation:winFlash .4s ease;}
+@keyframes winFlash{0%{transform:scale(1);}50%{transform:scale(1.12);}100%{transform:scale(1);}}
+
+/* SVG inside tile */
+.tile svg{
+  width:100%;height:100%;
+  display:block;
+  transition:all .15s;
+}
+
+/* Rotation animation */
+.tile.rotating{animation:rotateTile .15s ease;}
+@keyframes rotateTile{0%{transform:scale(0.88);}100%{transform:scale(1);}}
+
+/* ═══════════════════════════════════════════
+   SIDE PANEL
+═══════════════════════════════════════════ */
+#side{
+  display:flex;flex-direction:column;
+  gap:10px;
+  width:200px;
+  flex-shrink:0;
+  height:100%;
+  overflow-y:auto;
+  scrollbar-width:none;
+}
+#side::-webkit-scrollbar{display:none;}
+
+.card{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:12px 14px;
+  flex-shrink:0;
+}
+.card-title{
+  font-size:9px;letter-spacing:2px;text-transform:uppercase;
+  color:rgba(255,255,255,0.3);margin-bottom:8px;
+}
+
+/* Level info */
+#level-name{font-size:15px;font-weight:800;color:var(--cyan);margin-bottom:3px;}
+#level-desc{font-size:11px;color:rgba(255,255,255,0.4);line-height:1.5;}
+
+/* Tile legend */
+.legend-item{
+  display:flex;align-items:center;gap:8px;
+  margin-bottom:7px;font-size:11px;color:rgba(255,255,255,0.55);
+}
+.legend-icon{
+  width:28px;height:28px;flex-shrink:0;
+  background:var(--dim);border-radius:6px;
+  display:flex;align-items:center;justify-content:center;
+}
+.legend-icon svg{width:22px;height:22px;}
+
+/* Rules */
+.rule{
+  display:flex;gap:8px;align-items:flex-start;
+  margin-bottom:8px;font-size:11px;color:rgba(255,255,255,0.5);line-height:1.5;
+}
+.rule-num{
+  width:18px;height:18px;border-radius:50%;
+  background:rgba(0,200,255,0.15);
+  color:var(--cyan);font-size:10px;font-weight:800;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;margin-top:1px;
+}
+
+/* Buttons */
+.btn{
+  width:100%;border:none;border-radius:10px;
+  padding:10px;font-size:12px;font-weight:800;
+  cursor:pointer;transition:all .15s;letter-spacing:.5px;
+  margin-bottom:6px;
+}
+.btn-cyan{background:linear-gradient(135deg,#00a8d4,#006688);color:#fff;}
+.btn-cyan:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,200,255,0.3);}
+.btn-dim{background:rgba(255,255,255,0.06);color:#aaa;border:1px solid rgba(255,255,255,0.08);}
+.btn-dim:hover{background:rgba(255,255,255,0.12);}
+.btn-green{background:linear-gradient(135deg,#00c866,#006633);color:#fff;}
+.btn-green:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,255,136,0.3);}
+
+/* ═══════════════════════════════════════════
+   OVERLAYS
+═══════════════════════════════════════════ */
+.overlay{
+  position:fixed;inset:0;
+  background:rgba(0,0,0,0.88);
+  display:flex;align-items:center;justify-content:center;
+  z-index:100;backdrop-filter:blur(8px);
+  transition:opacity .3s;
+}
+.overlay.hidden{opacity:0;pointer-events:none;}
+.overlay-box{
+  background:linear-gradient(135deg,#0f1628,#0a0e1a);
+  border:1px solid rgba(0,200,255,0.2);
+  border-radius:24px;
+  padding:32px 36px;
+  text-align:center;
+  max-width:380px;width:90%;
+  box-shadow:0 0 60px rgba(0,200,255,0.1);
+}
+.overlay-box h2{
+  font-size:clamp(24px,5vw,36px);
+  font-weight:900;margin-bottom:8px;
+}
+.overlay-box p{color:rgba(255,255,255,0.5);font-size:14px;margin-bottom:20px;line-height:1.6;}
+
+/* Win overlay */
+#win-overlay .overlay-box h2{
+  background:linear-gradient(135deg,var(--yellow),var(--green));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+#win-stats{
+  display:flex;gap:12px;justify-content:center;margin-bottom:20px;flex-wrap:wrap;
+}
+.win-stat{
+  background:rgba(0,200,255,0.08);border:1px solid rgba(0,200,255,0.15);
+  border-radius:12px;padding:8px 16px;
+}
+.win-stat-lbl{font-size:10px;color:rgba(255,255,255,0.4);letter-spacing:1px;text-transform:uppercase;}
+.win-stat-val{font-size:20px;font-weight:800;color:#fff;}
+
+/* Start overlay */
+#start-overlay .overlay-box h2{color:var(--cyan);}
+
+/* ═══════════════════════════════════════════
+   ANIMATED CURRENT FLOW (on powered wires)
+═══════════════════════════════════════════ */
+@keyframes flowH{0%{stroke-dashoffset:20;}100%{stroke-dashoffset:0;}}
+@keyframes flowV{0%{stroke-dashoffset:20;}100%{stroke-dashoffset:0;}}
+.flow-line{
+  stroke-dasharray:6 4;
+  animation:flowH .4s linear infinite;
+}
+
+/* ═══════════════════════════════════════════
+   CONFETTI
+═══════════════════════════════════════════ */
+.confetti-piece{
+  position:fixed;top:-10px;
+  width:8px;height:8px;
+  border-radius:2px;
+  animation:confettiFall linear forwards;
+  pointer-events:none;z-index:200;
+}
+@keyframes confettiFall{
+  0%{transform:translateY(0) rotate(0deg);opacity:1;}
+  100%{transform:translateY(110vh) rotate(720deg);opacity:0;}
+}
+
+/* ═══════════════════════════════════════════
+   RESPONSIVE MEDIA QUERIES
+═══════════════════════════════════════════ */
+
+/* Large desktop */
+@media(min-width:900px){
+  :root{--tile:58px;}
+  #side{width:220px;}
+}
+
+/* Tablet portrait */
+@media(max-width:720px){
+  :root{--tile:46px;}
+  #main{flex-direction:column;align-items:center;padding:0 8px 8px;gap:10px;overflow-y:auto;}
+  #grid-wrap{flex:none;width:100%;}
+  #side{
+    flex-direction:row;flex-wrap:wrap;
+    width:100%;height:auto;
+    overflow:visible;
+  }
+  #side .card{flex:1;min-width:140px;}
+  #side #btn-card{width:100%;}
+}
+
+/* Mobile phone */
+@media(max-width:480px){
+  :root{--tile:40px;}
+  #header{padding:8px 10px 4px;}
+  #title{font-size:15px;}
+  .stat{padding:3px 8px;}
+  .stat-val{font-size:14px;}
+  #main{padding:0 6px 6px;}
+  #grid{padding:7px;gap:2px;border-radius:12px;}
+  .tile{border-radius:6px;}
+  #side .card{padding:10px 10px;}
+  .overlay-box{padding:24px 20px;}
+}
+
+/* Very small phones */
+@media(max-width:360px){
+  :root{--tile:34px;}
+  .stat{display:none;}
+  #stats .stat:first-child{display:flex;}
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div id="header">
+  <div id="title">⚡ CIRCUIT PUZZLE</div>
+  <div id="stats">
+    <div class="stat"><div class="stat-lbl">Level</div><div class="stat-val" id="level-val">1</div></div>
+    <div class="stat"><div class="stat-lbl">Moves</div><div class="stat-val" id="moves-val">0</div></div>
+    <div class="stat"><div class="stat-lbl">Time</div><div class="stat-val" id="timer-val">0:00</div></div>
+  </div>
+</div>
+
+<!-- Progress -->
+<div id="progress-wrap">
+  <div id="progress-track"><div id="progress-fill" style="width:10%"></div></div>
+  <div id="level-dots"></div>
+</div>
+
+<!-- Main -->
+<div id="main">
+  <div id="grid-wrap">
+    <div id="grid"></div>
+  </div>
+
+  <div id="side">
+    <!-- Level info -->
+    <div class="card">
+      <div class="card-title">Current Level</div>
+      <div id="level-name">Level 1</div>
+      <div id="level-desc">Rotate tiles to connect the power source to all light bulbs.</div>
+    </div>
+
+    <!-- Legend -->
+    <div class="card">
+      <div class="card-title">Tile Types</div>
+      <div class="legend-item">
+        <div class="legend-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" fill="none" stroke="#ffd700" stroke-width="2"/><line x1="12" y1="5" x2="12" y2="1" stroke="#ffd700" stroke-width="2"/><circle cx="12" cy="12" r="2" fill="#ffd700"/></svg></div>
+        <span><b style="color:#ffd700">Source</b> — fixed, emits power</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" fill="none" stroke="#888" stroke-width="2"/><line x1="12" y1="6" x2="12" y2="2" stroke="#888" stroke-width="2"/><path d="M9 10 L12 14 L15 10" fill="none" stroke="#888" stroke-width="1.5"/></svg></div>
+        <span><b style="color:#aaa">Bulb</b> — lights up when powered</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-icon"><svg viewBox="0 0 24 24"><line x1="2" y1="12" x2="22" y2="12" stroke="#00c8ff" stroke-width="3" stroke-linecap="round"/></svg></div>
+        <span><b style="color:#00c8ff">Straight</b> — passes through</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-icon"><svg viewBox="0 0 24 24"><path d="M12 2 L12 12 L22 12" fill="none" stroke="#00c8ff" stroke-width="3" stroke-linecap="round"/></svg></div>
+        <span><b style="color:#00c8ff">Elbow</b> — turns 90°</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-icon"><svg viewBox="0 0 24 24"><line x1="2" y1="12" x2="22" y2="12" stroke="#00c8ff" stroke-width="3" stroke-linecap="round"/><line x1="12" y1="2" x2="12" y2="12" stroke="#00c8ff" stroke-width="3" stroke-linecap="round"/></svg></div>
+        <span><b style="color:#00c8ff">T-Junction</b> — splits 3 ways</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-icon"><svg viewBox="0 0 24 24"><line x1="2" y1="12" x2="22" y2="12" stroke="#00c8ff" stroke-width="3" stroke-linecap="round"/><line x1="12" y1="2" x2="12" y2="22" stroke="#00c8ff" stroke-width="3" stroke-linecap="round"/></svg></div>
+        <span><b style="color:#00c8ff">Cross</b> — all 4 directions</span>
+      </div>
+    </div>
+
+    <!-- Rules -->
+    <div class="card">
+      <div class="card-title">How to Play</div>
+      <div class="rule"><div class="rule-num">1</div><span>Click any rotatable tile to rotate it 90° clockwise</span></div>
+      <div class="rule"><div class="rule-num">2</div><span>Connect the <span style="color:#ffd700">⚡ power source</span> to every <span style="color:#00ff88">💡 bulb</span></span></div>
+      <div class="rule"><div class="rule-num">3</div><span>Power flows through connected wire ends — gaps break the circuit</span></div>
+      <div class="rule"><div class="rule-num">4</div><span>All bulbs must be lit at the same time to win</span></div>
+      <div class="rule"><div class="rule-num">5</div><span>Yellow tiles are <b>fixed</b> and cannot be rotated</span></div>
+    </div>
+
+    <!-- Buttons -->
+    <div class="card" id="btn-card">
+      <button class="btn btn-dim" id="btn-restart">🔄 Restart Level</button>
+      <button class="btn btn-dim" id="btn-prev">◀ Previous</button>
+      <button class="btn btn-cyan" id="btn-next">Next Level ▶</button>
+    </div>
+  </div>
+</div>
+
+<!-- Start Overlay -->
+<div class="overlay" id="start-overlay">
+  <div class="overlay-box">
+    <h2>⚡ Circuit Puzzle</h2>
+    <p>Rotate wire tiles to guide electricity from the <span style="color:#ffd700">power source</span> to every <span style="color:#00ff88">light bulb</span>.<br/><br/>10 handcrafted levels — from beginner to mind-bending!</p>
+    <button class="btn btn-green" id="btn-start" style="margin-bottom:0">⚡ Start Playing</button>
+  </div>
+</div>
+
+<!-- Win Overlay -->
+<div class="overlay hidden" id="win-overlay">
+  <div class="overlay-box">
+    <h2>🎉 Circuit Complete!</h2>
+    <p id="win-msg">All bulbs are powered!</p>
+    <div id="win-stats">
+      <div class="win-stat"><div class="win-stat-lbl">Time</div><div class="win-stat-val" id="win-time">0:00</div></div>
+      <div class="win-stat"><div class="win-stat-lbl">Moves</div><div class="win-stat-val" id="win-moves">0</div></div>
+      <div class="win-stat"><div class="win-stat-lbl">Rating</div><div class="win-stat-val" id="win-rating">⭐⭐⭐</div></div>
+    </div>
+    <button class="btn btn-green" id="btn-win-next" style="margin-bottom:8px">Next Level ⚡</button>
+    <button class="btn btn-dim" id="btn-win-restart">Replay Level</button>
+  </div>
+</div>
+
+<!-- All Clear Overlay -->
+<div class="overlay hidden" id="clear-overlay">
+  <div class="overlay-box">
+    <h2 style="background:linear-gradient(135deg,#ffd700,#ff8800);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">🏆 All Levels Clear!</h2>
+    <p>You've completed all 10 circuits!<br/>You're a true electrical engineer. ⚡</p>
+    <button class="btn btn-green" id="btn-restart-all" style="margin-bottom:0">🔄 Play Again</button>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  TILE SYSTEM
+//  Each tile has a TYPE and a ROTATION (0,1,2,3 = 0°,90°,180°,270°)
+//  Connections are defined as which sides are open: N,E,S,W
+// ═══════════════════════════════════════════════════════════════
+
+// Returns open sides for a tile type at a given rotation
+// Sides: 0=N, 1=E, 2=S, 3=W
+const BASE_CONNECTIONS = {
+  'source':  [0,1,2,3],   // all sides (fixed)
+  'bulb':    [0,1,2,3],   // all sides (fixed) — lights if any side receives power
+  'cross':   [0,1,2,3],   // all 4 sides always
+  'straight':[0,2],       // N-S
+  'elbow':   [0,1],       // N-E
+  'tee':     [0,1,3],     // N-E-W
+  'dead':    [],           // no connections (blocker)
+};
+
+function getConnections(type, rot){
+  const base = BASE_CONNECTIONS[type] || [];
+  return base.map(s => (s + rot) % 4);
+}
+
+function connects(type, rot, side){
+  return getConnections(type, rot).includes(side);
+}
+
+// Opposite side
+const OPP = [2,3,0,1]; // N↔S, E↔W
+
+// ═══════════════════════════════════════════════════════════════
+//  LEVELS
+//  Each level: { name, desc, grid: 2D array of {type, rot, fixed?} }
+//  Types: source, bulb, straight, elbow, tee, cross, dead, empty
+// ═══════════════════════════════════════════════════════════════
+const LEVELS = [
+// ── Level 1: 3×3 — Tutorial ──────────────────────────────────
+{
+  name:'Warm-Up',
+  desc:'Connect the source to the single bulb. Just one rotation needed!',
+  grid:[
+    [{type:'source',rot:0,fixed:true}, {type:'straight',rot:1}, {type:'bulb',rot:0,fixed:true}],
+    [{type:'empty'},{type:'empty'},{type:'empty'}],
+    [{type:'empty'},{type:'empty'},{type:'empty'}],
+  ]
+},
+// ── Level 2: 4×4 — First corner ──────────────────────────────
+{
+  name:'First Turn',
+  desc:'Route the power around the corner to light the bulb.',
+  grid:[
+    [{type:'source',rot:0,fixed:true},{type:'elbow',rot:3},{type:'empty'},{type:'empty'}],
+    [{type:'empty'},{type:'straight',rot:0},{type:'empty'},{type:'empty'}],
+    [{type:'empty'},{type:'elbow',rot:0},{type:'straight',rot:1},{type:'bulb',rot:0,fixed:true}],
+    [{type:'empty'},{type:'empty'},{type:'empty'},{type:'empty'}],
+  ]
+},
+// ── Level 3: 4×4 — Two bulbs ─────────────────────────────────
+{
+  name:'Split Signal',
+  desc:'Power splits at a T-junction to reach two bulbs.',
+  grid:[
+    [{type:'empty'},{type:'bulb',rot:2,fixed:true},{type:'empty'},{type:'empty'}],
+    [{type:'empty'},{type:'straight',rot:0},{type:'empty'},{type:'empty'}],
+    [{type:'source',rot:0,fixed:true},{type:'tee',rot:0},{type:'straight',rot:1},{type:'bulb',rot:3,fixed:true}],
+    [{type:'empty'},{type:'empty'},{type:'empty'},{type:'empty'}],
+  ]
+},
+// ── Level 4: 5×5 — Winding path ──────────────────────────────
+{
+  name:'The Winding Road',
+  desc:'Follow the path — every tile must be connected.',
+  grid:[
+    [{type:'source',rot:0,fixed:true},{type:'elbow',rot:2},{type:'straight',rot:1},{type:'elbow',rot:2},{type:'empty'}],
+    [{type:'empty'},{type:'straight',rot:0},{type:'empty'},{type:'straight',rot:0},{type:'empty'}],
+    [{type:'empty'},{type:'elbow',rot:0},{type:'tee',rot:2},{type:'elbow',rot:3},{type:'empty'}],
+    [{type:'empty'},{type:'empty'},{type:'straight',rot:0},{type:'empty'},{type:'empty'}],
+    [{type:'empty'},{type:'empty'},{type:'bulb',rot:0,fixed:true},{type:'empty'},{type:'empty'}],
+  ]
+},
+// ── Level 5: 5×5 — Three bulbs ───────────────────────────────
+{
+  name:'Triple Threat',
+  desc:'Three bulbs. One source. Plan your route carefully!',
+  grid:[
+    [{type:'bulb',rot:3,fixed:true},{type:'straight',rot:1},{type:'tee',rot:3},{type:'straight',rot:1},{type:'bulb',rot:1,fixed:true}],
+    [{type:'empty'},{type:'empty'},{type:'straight',rot:0},{type:'empty'},{type:'empty'}],
+    [{type:'empty'},{type:'empty'},{type:'source',rot:0,fixed:true},{type:'empty'},{type:'empty'}],
+    [{type:'empty'},{type:'empty'},{type:'straight',rot:0},{type:'empty'},{type:'empty'}],
+    [{type:'empty'},{type:'empty'},{type:'bulb',rot:2,fixed:true},{type:'empty'},{type:'empty'}],
+  ]
+},
+// ── Level 6: 5×5 — Cross roads ───────────────────────────────
+{
+  name:'Crossroads',
+  desc:'A cross tile lets power flow in all four directions at once.',
+  grid:[
+    [{type:'empty'},{type:'bulb',rot:2,fixed:true},{type:'empty'},{type:'bulb',rot:2,fixed:true},{type:'empty'}],
+    [{type:'empty'},{type:'straight',rot:0},{type:'empty'},{type:'straight',rot:0},{type:'empty'}],
+    [{type:'bulb',rot:1,fixed:true},{type:'tee',rot:0},{type:'cross',rot:0},{type:'tee',rot:0},{type:'bulb',rot:3,fixed:true}],
+    [{type:'empty'},{type:'empty'},{type:'straight',rot:0},{type:'empty'},{type:'empty'}],
+    [{type:'empty'},{type:'empty'},{type:'source',rot:0,fixed:true},{type:'empty'},{type:'empty'}],
+  ]
+},
+// ── Level 7: 6×6 — The Maze ──────────────────────────────────
+{
+  name:'The Maze',
+  desc:'Navigate the wires through a complex 6×6 grid.',
+  grid:[
+    [{type:'source',rot:0,fixed:true},{type:'tee',rot:0},{type:'straight',rot:1},{type:'straight',rot:1},{type:'elbow',rot:2},{type:'empty'}],
+    [{type:'empty'},{type:'straight',rot:0},{type:'empty'},{type:'empty'},{type:'straight',rot:0},{type:'empty'}],
+    [{type:'empty'},{type:'elbow',rot:0},{type:'elbow',rot:3},{type:'straight',rot:1},{type:'tee',rot:1},{type:'bulb',rot:3,fixed:true}],
+    [{type:'empty'},{type:'empty'},{type:'straight',rot:0},{type:'empty'},{type:'straight',rot:0},{type:'empty'}],
+    [{type:'empty'},{type:'empty'},{type:'elbow',rot:0},{type:'straight',rot:1},{type:'elbow',rot:1},{type:'empty'}],
+    [{type:'empty'},{type:'empty'},{type:'empty'},{type:'empty'},{type:'elbow',rot:2},{type:'bulb',rot:2,fixed:true}],
+  ]
+},
+// ── Level 8: 6×6 — Four corners ──────────────────────────────
+{
+  name:'Four Corners',
+  desc:'Light up all four corner bulbs from the centre source.',
+  grid:[
+    [{type:'bulb',rot:2,fixed:true},{type:'straight',rot:1},{type:'elbow',rot:3},{type:'empty'},{type:'empty'},{type:'bulb',rot:2,fixed:true}],
+    [{type:'empty'},{type:'empty'},{type:'straight',rot:0},{type:'empty'},{type:'elbow',rot:2},{type:'elbow',rot:0}],
+    [{type:'empty'},{type:'empty'},{type:'tee',rot:3},{type:'tee',rot:1},{type:'tee',rot:1},{type:'empty'}],
+    [{type:'empty'},{type:'elbow',rot:3},{type:'cross',rot:0},{type:'tee',rot:1},{type:'tee',rot:2},{type:'empty'}],
+    [{type:'elbow',rot:1},{type:'tee',rot:0},{type:'tee',rot:0},{type:'empty'},{type:'straight',rot:0},{type:'empty'}],
+    [{type:'bulb',rot:0,fixed:true},{type:'empty'},{type:'source',rot:0,fixed:true},{type:'empty'},{type:'elbow',rot:2},{type:'bulb',rot:0,fixed:true}],
+  ]
+},
+// ── Level 9: 7×7 — The Web ───────────────────────────────────
+{
+  name:'The Web',
+  desc:'A dense network — every tile is part of the circuit.',
+  grid:[
+    [{type:'empty'},{type:'bulb',rot:2,fixed:true},{type:'empty'},{type:'bulb',rot:2,fixed:true},{type:'empty'},{type:'bulb',rot:2,fixed:true},{type:'empty'}],
+    [{type:'empty'},{type:'straight',rot:0},{type:'empty'},{type:'straight',rot:0},{type:'empty'},{type:'straight',rot:0},{type:'empty'}],
+    [{type:'bulb',rot:1,fixed:true},{type:'tee',rot:1},{type:'tee',rot:3},{type:'cross',rot:0},{type:'tee',rot:1},{type:'tee',rot:3},{type:'bulb',rot:3,fixed:true}],
+    [{type:'empty'},{type:'empty'},{type:'tee',rot:0},{type:'cross',rot:0},{type:'tee',rot:2},{type:'empty'},{type:'empty'}],
+    [{type:'empty'},{type:'empty'},{type:'elbow',rot:0},{type:'cross',rot:0},{type:'elbow',rot:1},{type:'empty'},{type:'empty'}],
+    [{type:'empty'},{type:'empty'},{type:'empty'},{type:'straight',rot:0},{type:'empty'},{type:'empty'},{type:'empty'}],
+    [{type:'empty'},{type:'empty'},{type:'empty'},{type:'source',rot:0,fixed:true},{type:'empty'},{type:'empty'},{type:'empty'}],
+  ]
+},
+// ── Level 10: 7×7 — Grandmaster ──────────────────────────────
+{
+  name:'Grandmaster Circuit',
+  desc:'The ultimate challenge. Six bulbs. One source. No hints.',
+  grid:[
+    [{type:'bulb',rot:2,fixed:true},{type:'tee',rot:2},{type:'straight',rot:1},{type:'tee',rot:3},{type:'straight',rot:1},{type:'tee',rot:0},{type:'bulb',rot:2,fixed:true}],
+    [{type:'empty'},{type:'straight',rot:0},{type:'empty'},{type:'straight',rot:0},{type:'empty'},{type:'straight',rot:0},{type:'empty'}],
+    [{type:'elbow',rot:3},{type:'cross',rot:0},{type:'straight',rot:1},{type:'cross',rot:0},{type:'straight',rot:1},{type:'cross',rot:0},{type:'elbow',rot:2}],
+    [{type:'tee',rot:1},{type:'tee',rot:1},{type:'empty'},{type:'straight',rot:0},{type:'empty'},{type:'tee',rot:3},{type:'tee',rot:3}],
+    [{type:'elbow',rot:0},{type:'cross',rot:0},{type:'straight',rot:1},{type:'cross',rot:0},{type:'straight',rot:1},{type:'cross',rot:0},{type:'elbow',rot:1}],
+    [{type:'empty'},{type:'straight',rot:0},{type:'empty'},{type:'straight',rot:0},{type:'empty'},{type:'straight',rot:0},{type:'empty'}],
+    [{type:'bulb',rot:0,fixed:true},{type:'tee',rot:2},{type:'straight',rot:1},{type:'source',rot:0,fixed:true},{type:'straight',rot:1},{type:'tee',rot:0},{type:'bulb',rot:0,fixed:true}],
+  ]
+},
+];
+
+// ═══════════════════════════════════════════════════════════════
+//  GAME STATE
+// ═══════════════════════════════════════════════════════════════
+let currentLevel = 0;
+let grid = [];         // 2D array of tile state objects
+let moves = 0;
+let seconds = 0;
+let timerInterval = null;
+let gameStarted = false;
+let bestTimes = JSON.parse(localStorage.getItem('circuitBestTimes')||'{}');
+
+// ═══════════════════════════════════════════════════════════════
+//  INIT LEVEL
+// ═══════════════════════════════════════════════════════════════
+function loadLevel(idx){
+  currentLevel = idx;
+  moves = 0;
+  seconds = 0;
+  clearInterval(timerInterval);
+  timerInterval = null;
+
+  const lvl = LEVELS[idx];
+  // Deep copy grid
+  grid = lvl.grid.map(row => row.map(cell => ({...cell})));
+
+  // Shuffle rotations of non-fixed tiles (makes puzzle random each play)
+  grid.forEach(row => row.forEach(cell => {
+    if(!cell.fixed && cell.type !== 'empty' && cell.type !== 'source' && cell.type !== 'bulb'){
+      cell.rot = Math.floor(Math.random() * 4);
+    }
+  }));
+
+  updateHUD();
+  renderGrid();
+  updateLevelUI();
+  updateProgress();
+
+  // Start timer on first interaction
+  document.getElementById('moves-val').textContent = '0';
+  document.getElementById('timer-val').textContent = '0:00';
+}
+
+function startTimer(){
+  if(timerInterval) return;
+  timerInterval = setInterval(()=>{
+    seconds++;
+    const m = Math.floor(seconds/60);
+    const s = seconds%60;
+    document.getElementById('timer-val').textContent = m+':'+(s<10?'0':'')+s;
+  }, 1000);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  RENDER GRID
+// ═══════════════════════════════════════════════════════════════
+function renderGrid(){
+  const gridEl = document.getElementById('grid');
+  const rows = grid.length, cols = grid[0].length;
+  gridEl.style.gridTemplateColumns = `repeat(${cols}, var(--tile))`;
+  gridEl.innerHTML = '';
+
+  // Compute powered state
+  const powered = computePower();
+
+  for(let r=0; r<rows; r++){
+    for(let c=0; c<cols; c++){
+      const cell = grid[r][c];
+      if(cell.type === 'empty'){
+        const div = document.createElement('div');
+        div.className = 'tile';
+        div.style.background = 'transparent';
+        div.style.border = 'none';
+        div.style.cursor = 'default';
+        gridEl.appendChild(div);
+        continue;
+      }
+
+      const isPowered = powered[r][c];
+      const div = document.createElement('div');
+      div.className = 'tile' + (isPowered?' powered':'') + (cell.fixed?' fixed':'');
+      div.dataset.r = r; div.dataset.c = c;
+      div.innerHTML = drawTile(cell.type, cell.rot, isPowered, cell.fixed);
+
+      div.addEventListener('click', ()=>rotateTile(r,c));
+
+      gridEl.appendChild(div);
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SVG TILE DRAWING
+// ═══════════════════════════════════════════════════════════════
+const WIRE_COLOR_OFF = '#1e3a5a';
+const WIRE_COLOR_ON  = '#00c8ff';
+const GLOW_ON = 'drop-shadow(0 0 6px #00c8ff)';
+
+function drawTile(type, rot, powered, fixed){
+  const wc = powered ? WIRE_COLOR_ON : WIRE_COLOR_OFF;
+  const glow = powered ? `filter:${GLOW_ON}` : '';
+  const rotDeg = rot * 90;
+
+  if(type === 'source'){
+    const c = powered ? '#ffd700' : '#886600';
+    const glow2 = powered ? 'drop-shadow(0 0 8px #ffd700)' : '';
+    return `<svg viewBox="0 0 52 52" style="filter:${glow2}">
+      <circle cx="26" cy="26" r="14" fill="none" stroke="${c}" stroke-width="3"/>
+      <circle cx="26" cy="26" r="5" fill="${c}"/>
+      <line x1="26" y1="2" x2="26" y2="12" stroke="${c}" stroke-width="3" stroke-linecap="round"/>
+      <line x1="26" y1="40" x2="26" y2="50" stroke="${c}" stroke-width="3" stroke-linecap="round"/>
+      <line x1="2" y1="26" x2="12" y2="26" stroke="${c}" stroke-width="3" stroke-linecap="round"/>
+      <line x1="40" y1="26" x2="50" y2="26" stroke="${c}" stroke-width="3" stroke-linecap="round"/>
+      ${powered?`<circle cx="26" cy="26" r="18" fill="none" stroke="${c}" stroke-width="1" opacity="0.3"/>`:''}</svg>`;
+  }
+
+  if(type === 'bulb'){
+    const c = powered ? '#00ff88' : '#1a4a2a';
+    const glow3 = powered ? 'drop-shadow(0 0 10px #00ff88)' : '';
+    const rays = powered ? `
+      <line x1="26" y1="4" x2="26" y2="10" stroke="${c}" stroke-width="2" opacity="0.7"/>
+      <line x1="44" y1="10" x2="40" y2="14" stroke="${c}" stroke-width="2" opacity="0.7"/>
+      <line x1="48" y1="26" x2="42" y2="26" stroke="${c}" stroke-width="2" opacity="0.7"/>
+      <line x1="44" y1="42" x2="40" y2="38" stroke="${c}" stroke-width="2" opacity="0.7"/>
+      <line x1="8" y1="10" x2="12" y2="14" stroke="${c}" stroke-width="2" opacity="0.7"/>
+      <line x1="4" y1="26" x2="10" y2="26" stroke="${c}" stroke-width="2" opacity="0.7"/>` : '';
+    return `<svg viewBox="0 0 52 52" style="filter:${glow3}">
+      ${rays}
+      <circle cx="26" cy="22" r="11" fill="${powered?'#003322':'#0d1a0d'}" stroke="${c}" stroke-width="2.5"/>
+      <path d="M20 33 L20 38 Q20 42 26 42 Q32 42 32 38 L32 33 Z" fill="${powered?'#002211':'#0a130a'}" stroke="${c}" stroke-width="2"/>
+      <line x1="22" y1="42" x2="30" y2="42" stroke="${c}" stroke-width="2"/>
+      <circle cx="26" cy="22" r="5" fill="${c}" opacity="${powered?'0.9':'0.2'}"/>
+      </svg>`;
+  }
+
+  if(type === 'cross'){
+    return `<svg viewBox="0 0 52 52" style="${glow}">
+      <line x1="26" y1="2" x2="26" y2="50" stroke="${wc}" stroke-width="6" stroke-linecap="round" ${powered?`class="flow-line"`:''}/>
+      <line x1="2" y1="26" x2="50" y2="26" stroke="${wc}" stroke-width="6" stroke-linecap="round" ${powered?`class="flow-line"`:''}/>
+      <circle cx="26" cy="26" r="4" fill="${wc}"/>
+      </svg>`;
+  }
+
+  // Rotatable wire tiles — rotate the SVG group
+  const transform = `transform="rotate(${rotDeg},26,26)"`;
+
+  if(type === 'straight'){
+    return `<svg viewBox="0 0 52 52" style="${glow}">
+      <g ${transform}>
+        <line x1="26" y1="2" x2="26" y2="50" stroke="${wc}" stroke-width="6" stroke-linecap="round" ${powered?`class="flow-line"`:''}/>
+        <circle cx="26" cy="26" r="3" fill="${wc}"/>
+      </g></svg>`;
+  }
+
+  if(type === 'elbow'){
+    return `<svg viewBox="0 0 52 52" style="${glow}">
+      <g ${transform}>
+        <path d="M26 2 L26 26 L50 26" fill="none" stroke="${wc}" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" ${powered?`class="flow-line"`:''}/>
+        <circle cx="26" cy="26" r="3" fill="${wc}"/>
+      </g></svg>`;
+  }
+
+  if(type === 'tee'){
+    return `<svg viewBox="0 0 52 52" style="${glow}">
+      <g ${transform}>
+        <line x1="2" y1="26" x2="50" y2="26" stroke="${wc}" stroke-width="6" stroke-linecap="round" ${powered?`class="flow-line"`:''}/>
+        <line x1="26" y1="2" x2="26" y2="26" stroke="${wc}" stroke-width="6" stroke-linecap="round" ${powered?`class="flow-line"`:''}/>
+        <circle cx="26" cy="26" r="3" fill="${wc}"/>
+      </g></svg>`;
+  }
+
+  return `<svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="3" fill="${WIRE_COLOR_OFF}"/></svg>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  POWER FLOW — BFS from source
+// ═══════════════════════════════════════════════════════════════
+function computePower(){
+  const rows = grid.length, cols = grid[0].length;
+  const powered = Array.from({length:rows},()=>Array(cols).fill(false));
+
+  // Find source
+  let srcR=-1, srcC=-1;
+  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++)
+    if(grid[r][c].type==='source'){ srcR=r; srcC=c; }
+  if(srcR<0) return powered;
+
+  // BFS
+  const queue = [[srcR,srcC]];
+  powered[srcR][srcC] = true;
+  const DR=[-1,0,1,0], DC=[0,1,0,-1]; // N,E,S,W
+
+  while(queue.length){
+    const [r,c] = queue.shift();
+    const cell = grid[r][c];
+    const openSides = getConnections(cell.type, cell.rot||0);
+
+    for(const side of openSides){
+      const nr=r+DR[side], nc=c+DC[side];
+      if(nr<0||nr>=rows||nc<0||nc>=cols) continue;
+      if(powered[nr][nc]) continue;
+      const neighbor = grid[nr][nc];
+      if(neighbor.type==='empty') continue;
+      // Check if neighbor opens toward us
+      const oppSide = OPP[side];
+      if(connects(neighbor.type, neighbor.rot||0, oppSide)){
+        powered[nr][nc] = true;
+        queue.push([nr,nc]);
+      }
+    }
+  }
+  return powered;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  ROTATE TILE
+// ═══════════════════════════════════════════════════════════════
+function rotateTile(r,c){
+  const cell = grid[r][c];
+  if(cell.fixed || cell.type==='empty' || cell.type==='cross') return;
+
+  startTimer();
+  cell.rot = (cell.rot + 1) % 4;
+  moves++;
+  document.getElementById('moves-val').textContent = moves;
+
+  // Animate
+  const tileEl = document.querySelector(`[data-r="${r}"][data-c="${c}"]`);
+  if(tileEl){ tileEl.classList.add('rotating'); setTimeout(()=>tileEl.classList.remove('rotating'),150); }
+
+  renderGrid();
+  checkWin();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  WIN CHECK
+// ═══════════════════════════════════════════════════════════════
+function checkWin(){
+  const powered = computePower();
+  const rows = grid.length, cols = grid[0].length;
+  let allBulbsPowered = true;
+  let hasBulb = false;
+
+  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
+    if(grid[r][c].type==='bulb'){
+      hasBulb = true;
+      if(!powered[r][c]){ allBulbsPowered=false; break; }
+    }
+  }
+
+  if(hasBulb && allBulbsPowered){
+    clearInterval(timerInterval); timerInterval=null;
+    // Win flash
+    document.querySelectorAll('.tile.powered').forEach(t=>t.classList.add('win-flash'));
+    setTimeout(()=>showWin(), 600);
+  }
+}
+
+function showWin(){
+  const m = Math.floor(seconds/60);
+  const s = seconds%60;
+  const timeStr = m+':'+(s<10?'0':'')+s;
+  document.getElementById('win-time').textContent = timeStr;
+  document.getElementById('win-moves').textContent = moves;
+
+  // Rating
+  const maxMoves = (grid.length * grid[0].length) * 2;
+  const rating = moves <= maxMoves*0.4 ? '⭐⭐⭐' : moves <= maxMoves*0.7 ? '⭐⭐' : '⭐';
+  document.getElementById('win-rating').textContent = rating;
+
+  // Save best
+  const key = 'lvl'+currentLevel;
+  if(!bestTimes[key] || seconds < bestTimes[key]){
+    bestTimes[key] = seconds;
+    localStorage.setItem('circuitBestTimes', JSON.stringify(bestTimes));
+  }
+
+  const isLast = currentLevel >= LEVELS.length-1;
+  document.getElementById('win-msg').textContent = isLast ? 'You completed ALL levels! 🏆' : `Level ${currentLevel+1} complete!`;
+  document.getElementById('btn-win-next').style.display = isLast ? 'none' : 'block';
+
+  document.getElementById('win-overlay').classList.remove('hidden');
+  confetti();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  CONFETTI
+// ═══════════════════════════════════════════════════════════════
+const CONF_COLORS=['#00c8ff','#00ff88','#ffd700','#ff4466','#cc44ff','#ffffff'];
+function confetti(){
+  for(let i=0;i<60;i++){
+    const el=document.createElement('div');
+    el.className='confetti-piece';
+    el.style.cssText=`
+      left:${Math.random()*100}vw;
+      background:${CONF_COLORS[Math.floor(Math.random()*CONF_COLORS.length)]};
+      width:${6+Math.random()*8}px;height:${6+Math.random()*8}px;
+      animation-duration:${1.5+Math.random()*2}s;
+      animation-delay:${Math.random()*0.5}s;
+      border-radius:${Math.random()<0.5?'50%':'2px'};
+    `;
+    document.body.appendChild(el);
+    setTimeout(()=>el.remove(), 4000);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  HUD & UI
+// ═══════════════════════════════════════════════════════════════
+function updateHUD(){
+  document.getElementById('level-val').textContent = currentLevel+1;
+  document.getElementById('moves-val').textContent = moves;
+}
+
+function updateLevelUI(){
+  const lvl = LEVELS[currentLevel];
+  document.getElementById('level-name').textContent = `Level ${currentLevel+1}: ${lvl.name}`;
+  document.getElementById('level-desc').textContent = lvl.desc;
+}
+
+function updateProgress(){
+  const pct = ((currentLevel+1)/LEVELS.length)*100;
+  document.getElementById('progress-fill').style.width = pct+'%';
+
+  const dotsEl = document.getElementById('level-dots');
+  dotsEl.innerHTML='';
+  LEVELS.forEach((_,i)=>{
+    const d=document.createElement('div');
+    d.className='ldot'+(i<currentLevel?' done':i===currentLevel?' current':'');
+    d.title=`Level ${i+1}: ${LEVELS[i].name}`;
+    d.addEventListener('click',()=>{ document.getElementById('win-overlay').classList.add('hidden'); loadLevel(i); });
+    dotsEl.appendChild(d);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  BUTTONS
+// ═══════════════════════════════════════════════════════════════
+document.getElementById('btn-start').addEventListener('click',()=>{
+  document.getElementById('start-overlay').classList.add('hidden');
+  loadLevel(0);
+});
+document.getElementById('btn-restart').addEventListener('click',()=>loadLevel(currentLevel));
+document.getElementById('btn-prev').addEventListener('click',()=>{
+  if(currentLevel>0){ document.getElementById('win-overlay').classList.add('hidden'); loadLevel(currentLevel-1); }
+});
+document.getElementById('btn-next').addEventListener('click',()=>{
+  if(currentLevel<LEVELS.length-1){ document.getElementById('win-overlay').classList.add('hidden'); loadLevel(currentLevel+1); }
+  else document.getElementById('clear-overlay').classList.remove('hidden');
+});
+document.getElementById('btn-win-next').addEventListener('click',()=>{
+  document.getElementById('win-overlay').classList.add('hidden');
+  if(currentLevel<LEVELS.length-1) loadLevel(currentLevel+1);
+  else document.getElementById('clear-overlay').classList.remove('hidden');
+});
+document.getElementById('btn-win-restart').addEventListener('click',()=>{
+  document.getElementById('win-overlay').classList.add('hidden');
+  loadLevel(currentLevel);
+});
+document.getElementById('btn-restart-all').addEventListener('click',()=>{
+  document.getElementById('clear-overlay').classList.add('hidden');
+  loadLevel(0);
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  RESIZE
+// ═══════════════════════════════════════════════════════════════
+window.addEventListener('resize',()=>renderGrid());
+
+// ═══════════════════════════════════════════════════════════════
+//  BOOT
+// ═══════════════════════════════════════════════════════════════
+loadLevel(0);
+</script>
+</body>
+</html>

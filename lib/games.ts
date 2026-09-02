@@ -115,6 +115,17 @@ export const BUILTIN_GAMES: Game[] = [
     src: "/games/2048.html",
     builtin: true,
   },
+  {
+    id: "circuit-puzzle",
+    title: "Circuit Puzzle",
+    description:
+      "Rotate wire tiles to route power from the source to every bulb across 10 handcrafted levels.",
+    category: "Puzzle",
+    emoji: "⚡",
+    tone: "sky",
+    src: "/games/circuit_puzzle.html",
+    builtin: true,
+  },
 ];
 
 export const TONE_CLASSES: Record<
