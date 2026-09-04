@@ -126,6 +126,17 @@ export const BUILTIN_GAMES: Game[] = [
     src: "/games/circuit_puzzle.html",
     builtin: true,
   },
+  {
+    id: "precision-platformer",
+    title: "Precision Platformer",
+    description:
+      "Master tight jumps, moving platforms and lethal hazards across 15 brutal levels.",
+    category: "Platformer",
+    emoji: "💀",
+    tone: "blush",
+    src: "/games/precision_platformer.html",
+    builtin: true,
+  },
 ];
 
 export const TONE_CLASSES: Record<

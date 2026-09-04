@@ -1,0 +1,1310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<title>💀 BRUTAL — Precision Platformer</title>
+<script type="application/json" id="game-help">
+{
+  "goal": "Reach the green flag at the end of each level without touching spikes, lasers, or falling out of bounds. Clear all 15 levels.",
+  "controls": [
+    { "keys": "A / D or Left / Right", "action": "Move" },
+    { "keys": "W / Space / Up", "action": "Jump" },
+    { "keys": "R", "action": "Restart the current level" },
+    { "keys": "On-screen buttons", "action": "Move and jump on touch devices" }
+  ],
+  "tips": [
+    "You can jump shortly after walking off a platform thanks to coyote time.",
+    "Moving platforms, bounce pads and gravity-flipped levels change the timing of each jump.",
+    "The cyan ghost shows your previous attempt, and the timer tracks your current run.",
+    "Deaths are persistent across sessions, so every attempt counts."
+  ]
+}
+</script>
+<style>
+:root{
+  --bg:#07080f;--panel:#0d1020;
+  --cyan:#00e5ff;--red:#ff1744;--green:#00e676;
+  --yellow:#ffd740;--purple:#d500f9;--orange:#ff6d00;
+  --text:#c8d8f0;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;}
+html,body{height:100%;overflow:hidden;background:var(--bg);}
+body{display:flex;flex-direction:column;align-items:center;font-family:'Segoe UI',system-ui,sans-serif;color:var(--text);}
+
+/* ── HEADER ── */
+#header{
+  width:100%;display:flex;align-items:center;justify-content:space-between;
+  padding:8px 14px;background:rgba(0,0,0,0.5);
+  border-bottom:1px solid rgba(0,229,255,0.1);
+  flex-shrink:0;gap:8px;flex-wrap:wrap;
+}
+#title{
+  font-size:clamp(14px,3vw,20px);font-weight:900;letter-spacing:3px;
+  color:var(--red);text-shadow:0 0 20px rgba(255,23,68,0.6);
+}
+.hstat{display:flex;flex-direction:column;align-items:center;
+  background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);
+  border-radius:8px;padding:3px 10px;}
+.hstat-lbl{font-size:8px;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,0.3);}
+.hstat-val{font-size:15px;font-weight:800;font-family:monospace;}
+#deaths-val{color:var(--red);}
+#level-val{color:var(--cyan);}
+#timer-val{color:var(--green);}
+#best-val{color:var(--yellow);}
+
+/* ── GAME CANVAS ── */
+#game-wrap{
+  flex:1;display:flex;align-items:center;justify-content:center;
+  width:100%;min-height:0;position:relative;
+}
+#c{display:block;image-rendering:pixelated;}
+
+/* ── RAGE QUOTE ── */
+#rage{
+  position:absolute;top:8px;left:50%;transform:translateX(-50%);
+  background:rgba(255,23,68,0.15);border:1px solid rgba(255,23,68,0.3);
+  border-radius:20px;padding:4px 16px;
+  font-size:13px;font-weight:700;color:var(--red);
+  pointer-events:none;white-space:nowrap;
+  opacity:0;transition:opacity .3s;
+  text-shadow:0 0 10px rgba(255,23,68,0.5);
+}
+#rage.show{opacity:1;}
+
+/* ── MOBILE CONTROLS ── */
+#mobile-ctrl{
+  position:fixed;bottom:0;left:0;right:0;
+  display:none;
+  padding:10px 16px 20px;
+  background:linear-gradient(transparent,rgba(0,0,0,0.8));
+  pointer-events:none;
+  justify-content:space-between;
+  align-items:flex-end;
+}
+.ctrl-btn{
+  width:64px;height:64px;border-radius:50%;
+  border:2px solid rgba(255,255,255,0.2);
+  background:rgba(255,255,255,0.08);
+  display:flex;align-items:center;justify-content:center;
+  font-size:22px;pointer-events:all;
+  touch-action:none;
+  transition:background .1s,border-color .1s;
+  -webkit-tap-highlight-color:transparent;
+}
+.ctrl-btn:active{background:rgba(255,255,255,0.2);border-color:rgba(0,229,255,0.5);}
+#ctrl-left{margin-right:6px;}
+#ctrl-jump{background:rgba(0,229,255,0.12);border-color:rgba(0,229,255,0.3);}
+#ctrl-jump:active{background:rgba(0,229,255,0.3);}
+.ctrl-group{display:flex;align-items:center;}
+
+/* ── OVERLAYS ── */
+.ov{
+  position:fixed;inset:0;background:rgba(0,0,0,0.88);
+  display:flex;align-items:center;justify-content:center;
+  z-index:99;backdrop-filter:blur(8px);
+  transition:opacity .3s;
+}
+.ov.hidden{opacity:0;pointer-events:none;}
+.ov-box{
+  background:linear-gradient(135deg,#0d1020,#07080f);
+  border:1px solid rgba(0,229,255,0.15);
+  border-radius:20px;padding:28px 32px;text-align:center;
+  max-width:360px;width:90%;
+  box-shadow:0 0 60px rgba(0,229,255,0.08);
+}
+.ov-box h2{font-size:clamp(22px,5vw,36px);font-weight:900;margin-bottom:6px;}
+.ov-box p{font-size:13px;color:rgba(255,255,255,0.45);margin-bottom:18px;line-height:1.6;}
+.ov-stats{display:flex;gap:10px;justify-content:center;margin-bottom:20px;flex-wrap:wrap;}
+.ov-stat{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);
+  border-radius:10px;padding:8px 14px;}
+.ov-stat-lbl{font-size:9px;color:rgba(255,255,255,0.35);letter-spacing:1px;text-transform:uppercase;}
+.ov-stat-val{font-size:18px;font-weight:800;color:#fff;}
+
+.btn{border:none;border-radius:30px;font-size:13px;font-weight:800;
+  cursor:pointer;transition:all .15s;padding:11px 28px;letter-spacing:.5px;}
+.btn-red{background:linear-gradient(135deg,#ff1744,#c0002a);color:#fff;}
+.btn-red:hover{transform:translateY(-1px);box-shadow:0 4px 20px rgba(255,23,68,0.4);}
+.btn-cyan{background:linear-gradient(135deg,#00b8d4,#006888);color:#fff;}
+.btn-cyan:hover{transform:translateY(-1px);box-shadow:0 4px 20px rgba(0,229,255,0.3);}
+.btn-green{background:linear-gradient(135deg,#00c853,#006627);color:#fff;}
+.btn-green:hover{transform:translateY(-1px);box-shadow:0 4px 20px rgba(0,230,118,0.3);}
+
+/* ── LEVEL SELECT ── */
+#level-dots{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-bottom:18px;}
+.lvldot{
+  width:36px;height:36px;border-radius:8px;
+  border:1px solid rgba(255,255,255,0.1);
+  background:rgba(255,255,255,0.04);
+  font-size:11px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;transition:all .15s;color:rgba(255,255,255,0.4);
+}
+.lvldot.done{background:rgba(0,230,118,0.15);border-color:var(--green);color:var(--green);}
+.lvldot.current{background:rgba(0,229,255,0.15);border-color:var(--cyan);color:var(--cyan);}
+.lvldot.locked{cursor:not-allowed;opacity:.35;}
+.lvldot:not(.locked):hover{transform:scale(1.1);}
+
+@media(max-width:600px){
+  #mobile-ctrl{display:flex;}
+  #header{padding:6px 10px; padding-bottom:calc(6px + env(safe-area-inset-bottom, 0px));}
+  .hstat{padding:2px 8px;}
+  .hstat-val{font-size:13px;}
+}
+@media(max-width:380px){
+  #mobile-ctrl{padding-left:10px;padding-right:10px;}
+  .ctrl-btn{width:56px;height:56px;font-size:18px;}
+}
+</style>
+</head>
+<body>
+
+<div id="header">
+  <div id="title">💀 BRUTAL</div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;">
+    <div class="hstat"><div class="hstat-lbl">Deaths</div><div class="hstat-val" id="deaths-val">0</div></div>
+    <div class="hstat"><div class="hstat-lbl">Level</div><div class="hstat-val" id="level-val">1/15</div></div>
+    <div class="hstat"><div class="hstat-lbl">Time</div><div class="hstat-val" id="timer-val">0.00</div></div>
+    <div class="hstat"><div class="hstat-lbl">Best</div><div class="hstat-val" id="best-val">—</div></div>
+  </div>
+</div>
+
+<div id="game-wrap">
+  <canvas id="c"></canvas>
+  <div id="rage"></div>
+</div>
+
+<!-- Mobile controls -->
+<div id="mobile-ctrl">
+  <div class="ctrl-group">
+    <div class="ctrl-btn" id="ctrl-left">◀</div>
+    <div class="ctrl-btn" id="ctrl-right">▶</div>
+  </div>
+  <div class="ctrl-btn" id="ctrl-jump">▲</div>
+</div>
+
+<!-- Start screen -->
+<div class="ov" id="start-ov">
+  <div class="ov-box">
+    <h2 style="color:var(--red)">💀 BRUTAL</h2>
+    <p>A precision platformer designed to make you question your life choices.<br/>
+    15 levels of pure suffering. Good luck. You'll need it.</p>
+    <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:12px;text-align:left;line-height:2;">
+      <b style="color:var(--cyan)">Controls:</b><br/>
+      ⬅️➡️ / A D — Move  |  Space / W / ↑ — Jump<br/>
+      R — Restart level  |  Touch — On-screen buttons
+    </div>
+    <button class="btn btn-red" id="btn-start">💀 I Accept My Fate</button>
+  </div>
+</div>
+
+<!-- Death screen -->
+<div class="ov hidden" id="death-ov">
+  <div class="ov-box">
+    <h2 style="color:var(--red)" id="death-emoji">💀</h2>
+    <p id="death-quote">skill issue</p>
+    <div class="ov-stats">
+      <div class="ov-stat"><div class="ov-stat-lbl">Deaths</div><div class="ov-stat-val" id="d-deaths">0</div></div>
+      <div class="ov-stat"><div class="ov-stat-lbl">This Attempt</div><div class="ov-stat-val" id="d-time">0.00s</div></div>
+    </div>
+    <button class="btn btn-red" id="btn-retry">🔄 Try Again (R)</button>
+  </div>
+</div>
+
+<!-- Level complete -->
+<div class="ov hidden" id="win-ov">
+  <div class="ov-box">
+    <h2 style="color:var(--green)">🎉</h2>
+    <p id="win-msg">Level cleared!</p>
+    <div class="ov-stats">
+      <div class="ov-stat"><div class="ov-stat-lbl">Time</div><div class="ov-stat-val" id="w-time">0.00s</div></div>
+      <div class="ov-stat"><div class="ov-stat-lbl">Best</div><div class="ov-stat-val" id="w-best">—</div></div>
+      <div class="ov-stat"><div class="ov-stat-lbl">Deaths</div><div class="ov-stat-val" id="w-deaths">0</div></div>
+    </div>
+    <button class="btn btn-green" id="btn-next">Next Level ▶</button>
+  </div>
+</div>
+
+<!-- All clear -->
+<div class="ov hidden" id="clear-ov">
+  <div class="ov-box">
+    <h2 style="color:var(--yellow)">🏆</h2>
+    <p>You beat all 15 levels. You are not normal.</p>
+    <div class="ov-stats">
+      <div class="ov-stat"><div class="ov-stat-lbl">Total Deaths</div><div class="ov-stat-val" id="c-deaths">0</div></div>
+    </div>
+    <button class="btn btn-cyan" id="btn-replay">🔄 Suffer Again</button>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  WEB AUDIO — procedural sound effects
+// ═══════════════════════════════════════════════════════════════
+const AC = new (window.AudioContext || window.webkitAudioContext)();
+
+function playSound(type){
+  try{
+    const o = AC.createOscillator();
+    const g = AC.createGain();
+    o.connect(g); g.connect(AC.destination);
+    const t = AC.currentTime;
+    if(type==='jump'){
+      o.type='square';
+      o.frequency.setValueAtTime(220,t);
+      o.frequency.exponentialRampToValueAtTime(440,t+0.08);
+      g.gain.setValueAtTime(0.12,t);
+      g.gain.exponentialRampToValueAtTime(0.001,t+0.15);
+      o.start(t); o.stop(t+0.15);
+    } else if(type==='die'){
+      o.type='sawtooth';
+      o.frequency.setValueAtTime(400,t);
+      o.frequency.exponentialRampToValueAtTime(60,t+0.3);
+      g.gain.setValueAtTime(0.2,t);
+      g.gain.exponentialRampToValueAtTime(0.001,t+0.3);
+      o.start(t); o.stop(t+0.3);
+    } else if(type==='win'){
+      o.type='sine';
+      o.frequency.setValueAtTime(523,t);
+      o.frequency.setValueAtTime(659,t+0.1);
+      o.frequency.setValueAtTime(784,t+0.2);
+      g.gain.setValueAtTime(0.15,t);
+      g.gain.exponentialRampToValueAtTime(0.001,t+0.4);
+      o.start(t); o.stop(t+0.4);
+    } else if(type==='bounce'){
+      o.type='sine';
+      o.frequency.setValueAtTime(600,t);
+      o.frequency.exponentialRampToValueAtTime(900,t+0.05);
+      g.gain.setValueAtTime(0.1,t);
+      g.gain.exponentialRampToValueAtTime(0.001,t+0.1);
+      o.start(t); o.stop(t+0.1);
+    }
+  }catch(e){}
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  RAGE QUOTES
+// ═══════════════════════════════════════════════════════════════
+const QUOTES = [
+  "skill issue 💀","try again bestie","git gud","maybe try minecraft instead",
+  "L + ratio","that was almost impressive","you were so close... not really",
+  "the spike said no","gravity is not your friend","touch grass then try again",
+  "certified fumble","bro really said 'hold my beer'","another one bites the dust",
+  "speedrunning the death counter","peak performance","this is fine 🔥",
+  "the floor is spikes","you died doing what you loved","F in chat",
+  "have you tried not dying?","the game is fine, it's you","respecting the grind tho",
+  "death #${n} hits different","one more try fr fr","almost... nope",
+  "the spikes are not decorative","sir this is a precision platformer",
+  "your controller is fine","it's giving chaos","we go again 🔥",
+];
+
+// ═══════════════════════════════════════════════════════════════
+//  LEVELS
+//  Each level: { name, spawn:[x,y], goal:[x,y,w,h], gravity,
+//    platforms:[[x,y,w,h,type?]], spikes:[[x,y,w,h,dir?]],
+//    movers:[{x,y,w,h,ax,ay,range,speed}],
+//    bounces:[[x,y,w,h]], lasers:[{x,y,w,h,axis,speed,range}] }
+//  All coords are in "level units" — canvas is 480x320 (scaled to fit)
+// ═══════════════════════════════════════════════════════════════
+const W=480, H=320;
+const PW=18, PH=18; // player size
+
+const LEVELS = [
+// ── 1: Tutorial ──────────────────────────────────────────────
+{
+  name:"Baby Steps",
+  spawn:[30,260],goal:{x:430,y:240,w:24,h:24},
+  gravity:0.5,
+  platforms:[
+    [0,290,480,30],          // floor
+    [200,220,80,12],         // mid platform
+    [350,180,100,12],        // high right
+  ],
+  spikes:[
+    [120,278,40,12,'up'],
+  ],
+  movers:[],bounces:[],lasers:[],
+},
+// ── 2: The Gap ───────────────────────────────────────────────
+{
+  name:"Mind the Gap",
+  spawn:[20,260],goal:{x:440,y:250,w:24,h:24},
+  gravity:0.5,
+  platforms:[
+    [0,290,160,30],
+    [220,290,260,30],
+    [140,220,60,12],
+  ],
+  spikes:[
+    [160,278,60,12,'up'],
+    [190,278,30,12,'up'],
+  ],
+  movers:[],bounces:[],lasers:[],
+},
+// ── 3: Spike Alley ───────────────────────────────────────────
+{
+  name:"Spike Alley",
+  spawn:[20,260],goal:{x:440,y:260,w:24,h:24},
+  gravity:0.5,
+  platforms:[
+    [0,290,480,30],
+    [100,230,60,12],
+    [220,200,60,12],
+    [340,230,60,12],
+  ],
+  spikes:[
+    [80,278,20,12,'up'],[120,278,20,12,'up'],[160,278,20,12,'up'],
+    [200,278,20,12,'up'],[240,278,20,12,'up'],[280,278,20,12,'up'],
+    [320,278,20,12,'up'],[360,278,20,12,'up'],
+    [100,218,60,12,'down'],[220,188,60,12,'down'],
+  ],
+  movers:[],bounces:[],lasers:[],
+},
+// ── 4: Moving Menace ─────────────────────────────────────────
+{
+  name:"Moving Menace",
+  spawn:[20,260],goal:{x:440,y:120,w:24,h:24},
+  gravity:0.5,
+  platforms:[
+    [0,290,120,30],
+    [360,290,120,30],
+    [0,140,80,12],
+    [400,140,80,12],
+  ],
+  spikes:[
+    [0,278,120,12,'up'],
+    [360,278,120,12,'up'],
+  ],
+  movers:[
+    {x:140,y:260,w:80,h:12,ax:1,ay:0,range:160,speed:1.8},
+    {x:160,y:180,w:80,h:12,ax:1,ay:0,range:120,speed:2.2},
+    {x:180,y:120,w:60,h:12,ax:1,ay:0,range:100,speed:2.8},
+  ],
+  bounces:[],lasers:[],
+},
+// ── 5: Ceiling of Doom ───────────────────────────────────────
+{
+  name:"Ceiling of Doom",
+  spawn:[20,260],goal:{x:440,y:260,w:24,h:24},
+  gravity:0.5,
+  platforms:[
+    [0,290,480,30],
+    [100,200,60,12],[200,240,60,12],[300,200,60,12],
+  ],
+  spikes:[
+    [60,0,360,14,'down'],  // ceiling spikes!
+    [0,278,60,12,'up'],[440,278,40,12,'up'],
+    [160,278,120,12,'up'],
+  ],
+  movers:[],bounces:[],lasers:[],
+},
+// ── 6: Bouncy Castle (from Hell) ─────────────────────────────
+{
+  name:"Bouncy Castle",
+  spawn:[20,260],goal:{x:440,y:60,w:24,h:24},
+  gravity:0.55,
+  platforms:[
+    [0,290,100,30],
+    [380,290,100,30],
+    [380,80,100,12],
+  ],
+  spikes:[
+    [100,278,280,12,'up'],
+    [0,0,380,14,'down'],
+  ],
+  movers:[],
+  bounces:[
+    [100,250,80,12],
+    [240,200,80,12],
+    [340,150,80,12],
+  ],
+  lasers:[],
+},
+// ── 7: Laser Show ────────────────────────────────────────────
+{
+  name:"Laser Show",
+  spawn:[20,200],goal:{x:440,y:200,w:24,h:24},
+  gravity:0.5,
+  platforms:[
+    [0,230,100,12],
+    [380,230,100,12],
+    [0,290,480,30],
+    [0,0,480,14],
+    [140,140,60,12],[240,180,60,12],[340,140,60,12],
+  ],
+  spikes:[
+    [100,278,280,12,'up'],
+  ],
+  movers:[],bounces:[],
+  lasers:[
+    {x:100,y:200,w:8,h:60,ax:1,ay:0,range:260,speed:2.5},
+    {x:200,y:100,w:8,h:80,ax:1,ay:0,range:180,speed:3.5},
+  ],
+},
+// ── 8: Gravity Flip ──────────────────────────────────────────
+{
+  name:"Upside Down",
+  spawn:[20,40],goal:{x:440,y:260,w:24,h:24},
+  gravity:-0.5,   // FLIPPED!
+  platforms:[
+    [0,0,480,20],  // ceiling = floor
+    [0,290,480,30],// floor = ceiling (spikes!)
+    [150,80,80,12],[280,80,80,12],
+    [150,230,80,12],[280,230,80,12],
+  ],
+  spikes:[
+    [0,278,480,12,'up'],  // floor is deadly
+    [100,0,280,14,'down'],
+  ],
+  movers:[
+    {x:100,y:120,w:60,h:12,ax:0,ay:1,range:80,speed:1.5},
+    {x:280,y:120,w:60,h:12,ax:0,ay:1,range:80,speed:2},
+  ],
+  bounces:[],lasers:[],
+},
+// ── 9: The Gauntlet ──────────────────────────────────────────
+{
+  name:"The Gauntlet",
+  spawn:[20,260],goal:{x:440,y:260,w:24,h:24},
+  gravity:0.5,
+  platforms:[
+    [0,290,60,30],[420,290,60,30],
+    [60,240,60,12],[180,200,60,12],[300,240,60,12],
+    [100,160,60,12],[240,120,60,12],[360,160,60,12],
+  ],
+  spikes:[
+    [60,278,360,12,'up'],
+    [60,228,60,12,'down'],[180,188,60,12,'down'],[300,228,60,12,'down'],
+    [100,148,60,12,'down'],[240,108,60,12,'down'],[360,148,60,12,'down'],
+  ],
+  movers:[
+    {x:60,y:240,w:60,h:12,ax:1,ay:0,range:60,speed:2},
+    {x:240,y:200,w:60,h:12,ax:1,ay:0,range:60,speed:2.5},
+  ],
+  bounces:[],lasers:[],
+},
+// ── 10: Laser Maze ───────────────────────────────────────────
+{
+  name:"Laser Maze",
+  spawn:[20,260],goal:{x:440,y:60,w:24,h:24},
+  gravity:0.5,
+  platforms:[
+    [0,290,480,30],
+    [0,80,100,12],[380,80,100,12],
+    [160,200,60,12],[260,160,60,12],
+  ],
+  spikes:[
+    [100,278,280,12,'up'],
+  ],
+  movers:[
+    {x:100,y:200,w:60,h:12,ax:1,ay:0,range:160,speed:2},
+  ],
+  bounces:[],
+  lasers:[
+    {x:100,y:140,w:8,h:100,ax:1,ay:0,range:200,speed:3},
+    {x:250,y:220,w:8,h:60,ax:1,ay:0,range:150,speed:4},
+    {x:150,y:60,w:8,h:120,ax:1,ay:0,range:200,speed:2.5},
+  ],
+},
+// ── 11: Wall of Pain ─────────────────────────────────────────
+{
+  name:"Wall of Pain",
+  spawn:[20,260],goal:{x:440,y:260,w:24,h:24},
+  gravity:0.5,
+  platforms:[
+    [0,290,480,30],
+    [80,220,20,12],[160,180,20,12],[240,220,20,12],[320,180,20,12],[380,220,20,12],
+    [80,140,20,12],[160,100,20,12],[240,140,20,12],[320,100,20,12],
+  ],
+  spikes:[
+    [0,278,80,12,'up'],[400,278,80,12,'up'],
+    [80,208,20,12,'down'],[160,168,20,12,'down'],[240,208,20,12,'down'],
+    [320,168,20,12,'down'],[380,208,20,12,'down'],
+  ],
+  movers:[
+    {x:100,y:260,w:40,h:12,ax:1,ay:0,range:280,speed:3.5},
+  ],
+  bounces:[],
+  lasers:[
+    {x:40,y:0,w:8,h:280,ax:0,ay:1,range:0,speed:0},
+    {x:440,y:0,w:8,h:280,ax:0,ay:1,range:0,speed:0},
+  ],
+},
+// ── 12: Chaos Theory ─────────────────────────────────────────
+{
+  name:"Chaos Theory",
+  spawn:[20,260],goal:{x:440,y:260,w:24,h:24},
+  gravity:0.5,
+  platforms:[
+    [0,290,100,30],[380,290,100,30],
+    [140,250,60,12],[240,210,60,12],[320,250,60,12],
+    [100,180,60,12],[200,140,60,12],[300,180,60,12],
+    [160,100,60,12],[260,60,60,12],
+  ],
+  spikes:[
+    [100,278,280,12,'up'],
+    [140,238,60,12,'down'],[240,198,60,12,'down'],[320,238,60,12,'down'],
+  ],
+  movers:[
+    {x:100,y:180,w:60,h:12,ax:1,ay:0,range:100,speed:3},
+    {x:200,y:140,w:60,h:12,ax:1,ay:0,range:80,speed:4},
+    {x:160,y:100,w:60,h:12,ax:0,ay:1,range:40,speed:2},
+  ],
+  bounces:[[200,260,80,12]],
+  lasers:[
+    {x:200,y:50,w:8,h:200,ax:1,ay:0,range:200,speed:5},
+  ],
+},
+// ── 13: The Impossible Room ──────────────────────────────────
+{
+  name:"The Impossible Room",
+  spawn:[20,260],goal:{x:440,y:260,w:24,h:24},
+  gravity:0.5,
+  platforms:[
+    [0,290,60,30],[420,290,60,30],
+    [0,0,60,320],[420,0,60,320],  // side walls (not deadly)
+  ],
+  spikes:[
+    [60,278,360,12,'up'],
+    [60,0,360,14,'down'],
+    [60,0,12,290,'right'],[408,0,12,290,'right'],
+  ],
+  movers:[
+    {x:80,y:200,w:60,h:12,ax:1,ay:0,range:260,speed:2},
+    {x:80,y:140,w:60,h:12,ax:1,ay:0,range:260,speed:3},
+    {x:80,y:80,w:60,h:12,ax:1,ay:0,range:260,speed:4},
+  ],
+  bounces:[],
+  lasers:[
+    {x:80,y:240,w:8,h:50,ax:1,ay:0,range:260,speed:5},
+    {x:200,y:100,w:8,h:180,ax:1,ay:0,range:140,speed:3.5},
+  ],
+},
+// ── 14: Gravity Madness ──────────────────────────────────────
+{
+  name:"Gravity Madness",
+  spawn:[20,40],goal:{x:440,y:40,w:24,h:24},
+  gravity:-0.55,
+  platforms:[
+    [0,0,480,20],
+    [0,290,480,30],
+    [100,80,60,12],[240,80,60,12],[360,80,60,12],
+    [100,220,60,12],[240,220,60,12],[360,220,60,12],
+    [160,150,60,12],[280,150,60,12],
+  ],
+  spikes:[
+    [0,278,480,12,'up'],
+    [100,0,280,14,'down'],
+    [100,68,60,12,'up'],[240,68,60,12,'up'],[360,68,60,12,'up'],
+  ],
+  movers:[
+    {x:100,y:130,w:60,h:12,ax:1,ay:0,range:120,speed:3},
+    {x:260,y:130,w:60,h:12,ax:1,ay:0,range:120,speed:4},
+  ],
+  bounces:[],
+  lasers:[
+    {x:60,y:50,w:8,h:220,ax:1,ay:0,range:300,speed:6},
+  ],
+},
+// ── 15: THE FINAL BOSS ───────────────────────────────────────
+{
+  name:"FINAL BOSS",
+  spawn:[20,260],goal:{x:440,y:260,w:24,h:24},
+  gravity:0.5,
+  platforms:[
+    [0,290,60,30],[420,290,60,30],
+    [60,240,60,12],[180,200,60,12],[300,240,60,12],
+    [60,160,60,12],[180,120,60,12],[300,160,60,12],
+    [120,80,60,12],[240,40,60,12],[340,80,60,12],
+  ],
+  spikes:[
+    [60,278,360,12,'up'],
+    [60,228,60,12,'down'],[180,188,60,12,'down'],[300,228,60,12,'down'],
+    [60,148,60,12,'down'],[180,108,60,12,'down'],[300,148,60,12,'down'],
+    [0,0,60,14,'down'],[420,0,60,14,'down'],
+  ],
+  movers:[
+    {x:60,y:240,w:60,h:12,ax:1,ay:0,range:60,speed:3},
+    {x:180,y:200,w:60,h:12,ax:1,ay:0,range:60,speed:4},
+    {x:300,y:240,w:60,h:12,ax:1,ay:0,range:60,speed:5},
+    {x:120,y:160,w:60,h:12,ax:0,ay:1,range:40,speed:3},
+    {x:300,y:160,w:60,h:12,ax:0,ay:1,range:40,speed:4},
+  ],
+  bounces:[[200,260,80,12]],
+  lasers:[
+    {x:60,y:100,w:8,h:180,ax:1,ay:0,range:300,speed:4},
+    {x:200,y:50,w:8,h:200,ax:1,ay:0,range:200,speed:6},
+    {x:100,y:200,w:8,h:80,ax:1,ay:0,range:260,speed:8},
+  ],
+},
+];
+
+// ═══════════════════════════════════════════════════════════════
+//  CANVAS SETUP
+// ═══════════════════════════════════════════════════════════════
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let scale = 1;
+
+function resizeCanvas(){
+  const wrap = document.getElementById('game-wrap');
+  const avW = wrap.clientWidth - 8;
+  const avH = wrap.clientHeight - 8;
+  scale = Math.min(avW / W, avH / H, 2);
+  canvas.width  = Math.floor(W * scale);
+  canvas.height = Math.floor(H * scale);
+  ctx.setTransform(scale, 0, 0, scale, 0, 0);
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+// ═══════════════════════════════════════════════════════════════
+//  GAME STATE
+// ═══════════════════════════════════════════════════════════════
+let currentLevel = 0;
+let totalDeaths = parseInt(localStorage.getItem('brutalDeaths')||'0');
+let bestTimes = JSON.parse(localStorage.getItem('brutalBest')||'{}');
+let clearedLevels = JSON.parse(localStorage.getItem('brutalCleared')||'[]');
+
+let player = {};
+let movers = [];
+let lasers = [];
+let particles = [];
+let ghostFrames = [];   // last attempt ghost
+let ghostPlayback = [];
+let levelTimer = 0;
+let levelDeaths = 0;
+let gameState = 'start'; // start|playing|dead|win|clear
+let deathTimer = 0;
+let winTimer = 0;
+let animFrame = 0;
+let lastTime = 0;
+
+// Input
+const keys = {};
+const touch = {left:false, right:false, jump:false};
+
+window.addEventListener('keydown', e=>{
+  keys[e.code] = true;
+  if(['Space','ArrowUp','ArrowLeft','ArrowRight','KeyW','KeyA','KeyD'].includes(e.code))
+    e.preventDefault();
+  if(e.code==='KeyR') restartLevel();
+  if(AC.state==='suspended') AC.resume();
+});
+window.addEventListener('keyup', e=>{ keys[e.code]=false; });
+
+// Touch controls
+function setupTouch(id, prop){
+  const el = document.getElementById(id);
+  el.addEventListener('touchstart', e=>{ e.preventDefault(); touch[prop]=true; if(AC.state==='suspended') AC.resume(); },{passive:false});
+  el.addEventListener('touchend',   e=>{ e.preventDefault(); touch[prop]=false; },{passive:false});
+  el.addEventListener('touchcancel',e=>{ touch[prop]=false; });
+}
+setupTouch('ctrl-left','left');
+setupTouch('ctrl-right','right');
+setupTouch('ctrl-jump','jump');
+
+function isLeft(){ return keys['ArrowLeft']||keys['KeyA']||touch.left; }
+function isRight(){ return keys['ArrowRight']||keys['KeyD']||touch.right; }
+function isJump(){ return keys['Space']||keys['ArrowUp']||keys['KeyW']||touch.jump; }
+
+let jumpPressed = false;
+let jumpConsumed = false;
+
+// ═══════════════════════════════════════════════════════════════
+//  PLAYER INIT
+// ═══════════════════════════════════════════════════════════════
+function initPlayer(){
+  const lvl = LEVELS[currentLevel];
+  player = {
+    x: lvl.spawn[0], y: lvl.spawn[1],
+    vx:0, vy:0,
+    onGround:false,
+    coyoteTime:0,   // grace frames after walking off edge
+    jumpBuffer:0,   // buffer jump input
+    alive:true,
+    trail:[],
+  };
+  movers = (lvl.movers||[]).map(m=>({...m, ox:m.x, oy:m.y, t:0}));
+  lasers = (lvl.lasers||[]).map(l=>({...l, ox:l.x, oy:l.y, t:0}));
+  particles = [];
+  ghostPlayback = [...ghostFrames];
+  ghostFrames = [];
+  levelTimer = 0;
+  animFrame = 0;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  PHYSICS & COLLISION
+// ═══════════════════════════════════════════════════════════════
+function rectOverlap(ax,ay,aw,ah, bx,by,bw,bh){
+  return ax<bx+bw && ax+aw>bx && ay<by+bh && ay+ah>by;
+}
+
+function getAllPlatforms(){
+  const lvl = LEVELS[currentLevel];
+  const plats = [...(lvl.platforms||[])];
+  movers.forEach(m => plats.push([m.x, m.y, m.w, m.h]));
+  return plats;
+}
+
+function updatePhysics(dt){
+  const lvl = LEVELS[currentLevel];
+  const gravity = (lvl.gravity||0.5) * dt * 60;
+
+  // Move movers
+  movers.forEach(m=>{
+    m.t += m.speed * dt * 60 / 60;
+    const s = Math.sin(m.t * 0.05);
+    m.x = m.ox + m.ax * s * m.range;
+    m.y = m.oy + m.ay * Math.abs(s) * m.range;
+  });
+
+  // Move lasers
+  lasers.forEach(l=>{
+    l.t += l.speed * dt * 60 / 60;
+    const s = Math.sin(l.t * 0.05);
+    l.x = l.ox + l.ax * s * l.range;
+    l.y = l.oy + l.ay * Math.abs(s) * l.range;
+  });
+
+  // Jump input with buffer
+  if(isJump() && !jumpPressed){
+    jumpPressed = true;
+    player.jumpBuffer = 8;
+  }
+  if(!isJump()) jumpPressed = false;
+  if(player.jumpBuffer > 0) player.jumpBuffer--;
+
+  // Horizontal
+  const spd = 3.2;
+  if(isLeft())  player.vx = Math.max(player.vx - 0.8, -spd);
+  else if(isRight()) player.vx = Math.min(player.vx + 0.8, spd);
+  else player.vx *= 0.78;
+
+  // Gravity
+  player.vy += gravity;
+  if(Math.abs(lvl.gravity) > 0 && lvl.gravity < 0){
+    player.vy = Math.min(player.vy, 8);
+  } else {
+    player.vy = Math.min(player.vy, 10);
+  }
+
+  // Coyote time
+  if(player.onGround) player.coyoteTime = 8;
+  else if(player.coyoteTime > 0) player.coyoteTime--;
+  player.onGround = false;
+
+  // Jump
+  if(player.jumpBuffer > 0 && player.coyoteTime > 0){
+    player.vy = lvl.gravity < 0 ? 5 : -8.5;
+    player.coyoteTime = 0;
+    player.jumpBuffer = 0;
+    playSound('jump');
+  }
+
+  // Move X
+  player.x += player.vx * dt * 60;
+  // Clamp to canvas
+  player.x = Math.max(0, Math.min(W - PW, player.x));
+
+  // Collide X
+  const plats = getAllPlatforms();
+  for(const p of plats){
+    if(rectOverlap(player.x,player.y,PW,PH, p[0],p[1],p[2],p[3])){
+      if(player.vx > 0) player.x = p[0] - PW;
+      else player.x = p[0] + p[2];
+      player.vx = 0;
+    }
+  }
+
+  // Move Y
+  player.y += player.vy * dt * 60;
+
+  // Collide Y
+  for(const p of plats){
+    if(rectOverlap(player.x,player.y,PW,PH, p[0],p[1],p[2],p[3])){
+      if(player.vy > 0){
+        player.y = p[1] - PH;
+        player.vy = 0;
+        player.onGround = true;
+        // Check bounce
+        const bounces = lvl.bounces||[];
+        for(const b of bounces){
+          if(rectOverlap(player.x,player.y,PW,PH, b[0],b[1],b[2],b[3])){
+            player.vy = lvl.gravity < 0 ? 9 : -12;
+            playSound('bounce');
+          }
+        }
+      } else {
+        player.y = p[1] + p[3];
+        player.vy = 0;
+      }
+    }
+  }
+
+  // Out of bounds = death
+  if(player.y > H + 50 || player.y < -100) killPlayer();
+
+  // Trail
+  player.trail.push({x:player.x+PW/2, y:player.y+PH/2});
+  if(player.trail.length > 12) player.trail.shift();
+
+  // Record ghost frame
+  ghostFrames.push({x:player.x, y:player.y});
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  HAZARD CHECK
+// ═══════════════════════════════════════════════════════════════
+function checkHazards(){
+  const lvl = LEVELS[currentLevel];
+
+  // Spikes
+  for(const s of (lvl.spikes||[])){
+    // spike hitbox is slightly inset
+    if(rectOverlap(player.x+2,player.y+2,PW-4,PH-4, s[0]+2,s[1]+2,s[2]-4,s[3]-4)){
+      killPlayer(); return;
+    }
+  }
+
+  // Lasers
+  for(const l of lasers){
+    if(rectOverlap(player.x+2,player.y+2,PW-4,PH-4, l.x,l.y,l.w,l.h)){
+      killPlayer(); return;
+    }
+  }
+}
+
+function checkGoal(){
+  const g = LEVELS[currentLevel].goal;
+  if(rectOverlap(player.x,player.y,PW,PH, g.x,g.y,g.w,g.h)){
+    winLevel();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  DEATH & WIN
+// ═══════════════════════════════════════════════════════════════
+function killPlayer(){
+  if(!player.alive) return;
+  player.alive = false;
+  totalDeaths++;
+  levelDeaths++;
+  localStorage.setItem('brutalDeaths', totalDeaths);
+  playSound('die');
+  spawnDeathParticles();
+  gameState = 'dead';
+  deathTimer = 0;
+
+  // Show death screen after brief delay
+  setTimeout(()=>{
+    const q = QUOTES[Math.floor(Math.random()*QUOTES.length)].replace('${n}',totalDeaths);
+    document.getElementById('death-quote').textContent = q;
+    document.getElementById('d-deaths').textContent = totalDeaths;
+    document.getElementById('d-time').textContent = levelTimer.toFixed(2)+'s';
+    document.getElementById('death-ov').classList.remove('hidden');
+    document.getElementById('deaths-val').textContent = totalDeaths;
+    showRage(q);
+  }, 600);
+}
+
+function winLevel(){
+  if(gameState==='win') return;
+  gameState = 'win';
+  playSound('win');
+
+  const key = 'lvl'+currentLevel;
+  const isNew = !bestTimes[key] || levelTimer < bestTimes[key];
+  if(isNew) bestTimes[key] = levelTimer;
+  localStorage.setItem('brutalBest', JSON.stringify(bestTimes));
+
+  if(!clearedLevels.includes(currentLevel)) clearedLevels.push(currentLevel);
+  localStorage.setItem('brutalCleared', JSON.stringify(clearedLevels));
+
+  spawnWinParticles();
+
+  setTimeout(()=>{
+    const isLast = currentLevel >= LEVELS.length-1;
+    document.getElementById('w-time').textContent = levelTimer.toFixed(2)+'s';
+    document.getElementById('w-best').textContent = (bestTimes[key]||levelTimer).toFixed(2)+'s';
+    document.getElementById('w-deaths').textContent = levelDeaths;
+    if(isLast){
+      document.getElementById('c-deaths').textContent = totalDeaths;
+      document.getElementById('clear-ov').classList.remove('hidden');
+    } else {
+      document.getElementById('win-msg').textContent = `Level ${currentLevel+1} cleared! ${isNew?'🏆 New best!':''}`;
+      document.getElementById('win-ov').classList.remove('hidden');
+    }
+  }, 800);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  PARTICLES
+// ═══════════════════════════════════════════════════════════════
+function spawnDeathParticles(){
+  for(let i=0;i<20;i++){
+    const a = Math.random()*Math.PI*2;
+    const spd = 2+Math.random()*5;
+    particles.push({
+      x:player.x+PW/2, y:player.y+PH/2,
+      vx:Math.cos(a)*spd, vy:Math.sin(a)*spd-2,
+      life:1, maxLife:1,
+      color:`hsl(${Math.random()*30},100%,60%)`,
+      size:3+Math.random()*4,
+    });
+  }
+}
+
+function spawnWinParticles(){
+  const g = LEVELS[currentLevel].goal;
+  for(let i=0;i<30;i++){
+    const a = Math.random()*Math.PI*2;
+    const spd = 1+Math.random()*6;
+    particles.push({
+      x:g.x+g.w/2, y:g.y+g.h/2,
+      vx:Math.cos(a)*spd, vy:Math.sin(a)*spd-3,
+      life:1.5, maxLife:1.5,
+      color:`hsl(${120+Math.random()*60},100%,65%)`,
+      size:4+Math.random()*5,
+    });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  RAGE QUOTE
+// ═══════════════════════════════════════════════════════════════
+let rageTimeout = null;
+function showRage(msg){
+  const el = document.getElementById('rage');
+  el.textContent = msg;
+  el.classList.add('show');
+  if(rageTimeout) clearTimeout(rageTimeout);
+  rageTimeout = setTimeout(()=>el.classList.remove('show'), 2500);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  RESTART
+// ═══════════════════════════════════════════════════════════════
+function restartLevel(){
+  hideAllOv();
+  initPlayer();
+  gameState = 'playing';
+  levelDeaths = 0;
+}
+
+function hideAllOv(){
+  ['death-ov','win-ov','clear-ov'].forEach(id=>
+    document.getElementById(id).classList.add('hidden')
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  DRAWING
+// ═══════════════════════════════════════════════════════════════
+function drawBg(){
+  ctx.fillStyle = '#07080f';
+  ctx.fillRect(0,0,W,H);
+
+  // Grid lines
+  ctx.strokeStyle = 'rgba(0,229,255,0.03)';
+  ctx.lineWidth = 1;
+  for(let x=0;x<W;x+=32){ ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke(); }
+  for(let y=0;y<H;y+=32){ ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke(); }
+}
+
+function drawPlatforms(){
+  const lvl = LEVELS[currentLevel];
+
+  // Static platforms
+  for(const p of (lvl.platforms||[])){
+    const grad = ctx.createLinearGradient(p[0],p[1],p[0],p[1]+p[3]);
+    grad.addColorStop(0,'#1a2a4a');
+    grad.addColorStop(1,'#0d1830');
+    ctx.fillStyle = grad;
+    ctx.fillRect(p[0],p[1],p[2],p[3]);
+    ctx.strokeStyle = 'rgba(0,229,255,0.3)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(p[0]+0.5,p[1]+0.5,p[2]-1,p[3]-1);
+    // Top highlight
+    ctx.fillStyle = 'rgba(0,229,255,0.15)';
+    ctx.fillRect(p[0],p[1],p[2],2);
+  }
+
+  // Bounce pads
+  for(const b of (lvl.bounces||[])){
+    ctx.fillStyle = '#1a4a2a';
+    ctx.fillRect(b[0],b[1],b[2],b[3]);
+    ctx.strokeStyle = '#00e676';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(b[0]+0.5,b[1]+0.5,b[2]-1,b[3]-1);
+    ctx.fillStyle = '#00e676';
+    ctx.fillRect(b[0],b[1],b[2],2);
+    // Spring arrows
+    ctx.fillStyle = 'rgba(0,230,118,0.6)';
+    const cx = b[0]+b[2]/2, ty = b[1]-4;
+    ctx.beginPath();ctx.moveTo(cx,ty);ctx.lineTo(cx-5,ty+6);ctx.lineTo(cx+5,ty+6);ctx.closePath();ctx.fill();
+  }
+
+  // Moving platforms
+  for(const m of movers){
+    const grad = ctx.createLinearGradient(m.x,m.y,m.x,m.y+m.h);
+    grad.addColorStop(0,'#2a1a4a');
+    grad.addColorStop(1,'#180d30');
+    ctx.fillStyle = grad;
+    ctx.fillRect(m.x,m.y,m.w,m.h);
+    ctx.strokeStyle = 'rgba(213,0,249,0.5)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(m.x+0.5,m.y+0.5,m.w-1,m.h-1);
+    ctx.fillStyle = 'rgba(213,0,249,0.3)';
+    ctx.fillRect(m.x,m.y,m.w,2);
+  }
+}
+
+function drawSpikes(){
+  const lvl = LEVELS[currentLevel];
+  const T = Date.now()*0.003;
+
+  for(const s of (lvl.spikes||[])){
+    const dir = s[4]||'up';
+    const count = Math.floor(s[2]/12);
+    const sw = s[2]/count;
+
+    ctx.fillStyle = `hsl(0,100%,${50+Math.sin(T)*5}%)`;
+    ctx.shadowColor = '#ff1744';
+    ctx.shadowBlur = 6;
+
+    for(let i=0;i<count;i++){
+      const sx = s[0]+i*sw;
+      ctx.beginPath();
+      if(dir==='up'){
+        ctx.moveTo(sx+sw*0.1,s[1]+s[3]);
+        ctx.lineTo(sx+sw*0.5,s[1]);
+        ctx.lineTo(sx+sw*0.9,s[1]+s[3]);
+      } else if(dir==='down'){
+        ctx.moveTo(sx+sw*0.1,s[1]);
+        ctx.lineTo(sx+sw*0.5,s[1]+s[3]);
+        ctx.lineTo(sx+sw*0.9,s[1]);
+      } else if(dir==='right'){
+        ctx.moveTo(s[0],s[1]+i*12+1);
+        ctx.lineTo(s[0]+s[2],s[1]+i*12+6);
+        ctx.lineTo(s[0],s[1]+i*12+11);
+      }
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+  }
+}
+
+function drawLasers(){
+  const T = Date.now()*0.004;
+  for(const l of lasers){
+    const alpha = 0.7+Math.sin(T)*0.3;
+    ctx.fillStyle = `rgba(255,23,68,${alpha})`;
+    ctx.shadowColor = '#ff1744';
+    ctx.shadowBlur = 12;
+    ctx.fillRect(l.x,l.y,l.w,l.h);
+    ctx.fillStyle = `rgba(255,150,150,${alpha*0.5})`;
+    ctx.fillRect(l.x-2,l.y-2,l.w+4,l.h+4);
+    ctx.shadowBlur = 0;
+  }
+}
+
+function drawGoal(){
+  const g = LEVELS[currentLevel].goal;
+  const T = Date.now()*0.003;
+  const pulse = Math.sin(T)*0.3+0.7;
+
+  ctx.shadowColor = '#00e676';
+  ctx.shadowBlur = 20*pulse;
+  ctx.fillStyle = `rgba(0,230,118,${0.3*pulse})`;
+  ctx.fillRect(g.x-4,g.y-4,g.w+8,g.h+8);
+  ctx.fillStyle = `rgba(0,230,118,${0.8*pulse})`;
+  ctx.fillRect(g.x,g.y,g.w,g.h);
+
+  // Flag
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(g.x+g.w/2-1,g.y-8,2,16);
+  ctx.fillStyle = '#00e676';
+  ctx.beginPath();
+  ctx.moveTo(g.x+g.w/2+1,g.y-8);
+  ctx.lineTo(g.x+g.w/2+9,g.y-4);
+  ctx.lineTo(g.x+g.w/2+1,g.y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.shadowBlur = 0;
+}
+
+function drawGhost(){
+  if(ghostPlayback.length === 0) return;
+  const frame = ghostPlayback[Math.min(animFrame, ghostPlayback.length-1)];
+  if(!frame) return;
+  ctx.fillStyle = 'rgba(0,229,255,0.12)';
+  ctx.strokeStyle = 'rgba(0,229,255,0.25)';
+  ctx.lineWidth = 1;
+  ctx.fillRect(frame.x, frame.y, PW, PH);
+  ctx.strokeRect(frame.x+0.5, frame.y+0.5, PW-1, PH-1);
+}
+
+function drawPlayer(){
+  if(!player.alive && gameState==='dead') return;
+
+  const T = Date.now()*0.006;
+
+  // Trail
+  for(let i=0;i<player.trail.length;i++){
+    const alpha = (i/player.trail.length)*0.3;
+    const size = (i/player.trail.length)*6;
+    ctx.fillStyle = `rgba(0,229,255,${alpha})`;
+    ctx.beginPath();
+    ctx.arc(player.trail[i].x, player.trail[i].y, size, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  // Body
+  const grd = ctx.createLinearGradient(player.x,player.y,player.x+PW,player.y+PH);
+  grd.addColorStop(0,'#00e5ff');
+  grd.addColorStop(1,'#0088aa');
+  ctx.fillStyle = grd;
+  ctx.shadowColor = '#00e5ff';
+  ctx.shadowBlur = 10;
+  ctx.fillRect(player.x,player.y,PW,PH);
+
+  // Eyes
+  ctx.fillStyle = '#fff';
+  ctx.shadowBlur = 0;
+  ctx.fillRect(player.x+3, player.y+4, 4, 4);
+  ctx.fillRect(player.x+11, player.y+4, 4, 4);
+  ctx.fillStyle = '#000';
+  const eyeOff = isLeft()?-1:isRight()?1:0;
+  ctx.fillRect(player.x+4+eyeOff, player.y+5, 2, 2);
+  ctx.fillRect(player.x+12+eyeOff, player.y+5, 2, 2);
+
+  // Legs animation
+  const legAnim = player.onGround ? Math.sin(T*10)*3 : 0;
+  ctx.fillStyle = '#0088aa';
+  ctx.fillRect(player.x+2, player.y+PH, 5, 4+Math.max(0,legAnim));
+  ctx.fillRect(player.x+11, player.y+PH, 5, 4+Math.max(0,-legAnim));
+  ctx.shadowBlur = 0;
+}
+
+function drawParticles(){
+  for(const p of particles){
+    const alpha = p.life/p.maxLife;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = p.color;
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 6;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size*alpha, 0, Math.PI*2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  ctx.shadowBlur = 0;
+}
+
+function drawHUD(){
+  const lvl = LEVELS[currentLevel];
+  // Level name
+  ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  ctx.font = 'bold 11px Segoe UI';
+  ctx.textAlign = 'left';
+  ctx.fillText(`${currentLevel+1}. ${lvl.name}`, 8, 16);
+
+  // Mini death counter in canvas
+  ctx.fillStyle = 'rgba(255,23,68,0.6)';
+  ctx.textAlign = 'right';
+  ctx.fillText(`💀 ${totalDeaths}`, W-8, 16);
+
+  ctx.textAlign = 'left';
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  MAIN LOOP
+// ═══════════════════════════════════════════════════════════════
+function loop(ts){
+  requestAnimationFrame(loop);
+  const dt = Math.min((ts-lastTime)/1000, 0.05);
+  lastTime = ts;
+
+  if(gameState==='playing'){
+    levelTimer += dt;
+    animFrame++;
+    updatePhysics(dt);
+    if(player.alive){
+      checkHazards();
+      if(player.alive) checkGoal();
+    }
+
+    // Update particles
+    for(let i=particles.length-1;i>=0;i--){
+      const p=particles[i];
+      p.x+=p.vx; p.y+=p.vy; p.vy+=0.2;
+      p.life-=dt;
+      if(p.life<=0) particles.splice(i,1);
+    }
+
+    // Update HUD timer
+    document.getElementById('timer-val').textContent = levelTimer.toFixed(2);
+    const key='lvl'+currentLevel;
+    document.getElementById('best-val').textContent = bestTimes[key]?(bestTimes[key].toFixed(2)+'s'):'—';
+  }
+
+  // Draw
+  drawBg();
+  drawGhost();
+  drawPlatforms();
+  drawSpikes();
+  drawLasers();
+  drawGoal();
+  if(gameState==='playing'||gameState==='dead') drawPlayer();
+  drawParticles();
+  drawHUD();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  BUTTON WIRING
+// ═══════════════════════════════════════════════════════════════
+document.getElementById('btn-start').addEventListener('click',()=>{
+  document.getElementById('start-ov').classList.add('hidden');
+  document.getElementById('deaths-val').textContent = totalDeaths;
+  initPlayer();
+  gameState='playing';
+  AC.resume();
+});
+
+document.getElementById('btn-retry').addEventListener('click',()=>restartLevel());
+document.getElementById('btn-next').addEventListener('click',()=>{
+  hideAllOv();
+  currentLevel = Math.min(currentLevel+1, LEVELS.length-1);
+  document.getElementById('level-val').textContent = `${currentLevel+1}/${LEVELS.length}`;
+  initPlayer();
+  levelDeaths=0;
+  gameState='playing';
+});
+document.getElementById('btn-replay').addEventListener('click',()=>{
+  hideAllOv();
+  currentLevel=0;
+  document.getElementById('level-val').textContent=`1/${LEVELS.length}`;
+  initPlayer();
+  levelDeaths=0;
+  gameState='playing';
+});
+
+// Keyboard shortcut for retry
+window.addEventListener('keydown',e=>{
+  if(e.code==='KeyR'&&(gameState==='dead'||gameState==='playing')) restartLevel();
+  if(e.code==='Escape') hideAllOv();
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  BOOT
+// ═══════════════════════════════════════════════════════════════
+document.getElementById('deaths-val').textContent = totalDeaths;
+document.getElementById('level-val').textContent = `1/${LEVELS.length}`;
+initPlayer();
+requestAnimationFrame(ts=>{ lastTime=ts; requestAnimationFrame(loop); });
+</script>
+</body>
+</html>
