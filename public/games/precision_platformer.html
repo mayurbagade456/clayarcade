@@ -343,20 +343,18 @@ const LEVELS = [
 },
 // ── 3: Spike Alley ───────────────────────────────────────────
 {
-  name:"Spike Alley",
+  name:"Spike Practice",
   spawn:[20,260],goal:{x:440,y:260,w:24,h:24},
   gravity:0.5,
   platforms:[
     [0,290,480,30],
-    [100,230,60,12],
-    [220,200,60,12],
-    [340,230,60,12],
+    [100,230,80,12],
+    [220,200,80,12],
+    [340,230,80,12],
   ],
   spikes:[
-    [80,278,20,12,'up'],[120,278,20,12,'up'],[160,278,20,12,'up'],
-    [200,278,20,12,'up'],[240,278,20,12,'up'],[280,278,20,12,'up'],
-    [320,278,20,12,'up'],[360,278,20,12,'up'],
-    [100,218,60,12,'down'],[220,188,60,12,'down'],
+    [150,278,28,12,'up'],
+    [300,278,28,12,'up'],
   ],
   movers:[],bounces:[],lasers:[],
 },
@@ -371,14 +369,11 @@ const LEVELS = [
     [0,140,80,12],
     [400,140,80,12],
   ],
-  spikes:[
-    [0,278,120,12,'up'],
-    [360,278,120,12,'up'],
-  ],
+  spikes:[],
   movers:[
     {x:140,y:260,w:80,h:12,ax:1,ay:0,range:160,speed:1.8},
-    {x:160,y:180,w:80,h:12,ax:1,ay:0,range:120,speed:2.2},
-    {x:180,y:120,w:60,h:12,ax:1,ay:0,range:100,speed:2.8},
+    {x:160,y:210,w:80,h:12,ax:1,ay:0,range:120,speed:2.2},
+    {x:180,y:160,w:60,h:12,ax:1,ay:0,range:100,speed:2.8},
   ],
   bounces:[],lasers:[],
 },
@@ -393,7 +388,6 @@ const LEVELS = [
   ],
   spikes:[
     [60,0,360,14,'down'],  // ceiling spikes!
-    [0,278,60,12,'up'],[440,278,40,12,'up'],
     [160,278,120,12,'up'],
   ],
   movers:[],bounces:[],lasers:[],
@@ -430,7 +424,7 @@ const LEVELS = [
     [380,230,100,12],
     [0,290,480,30],
     [0,0,480,14],
-    [140,140,60,12],[240,180,60,12],[340,140,60,12],
+    [140,190,60,12],[240,160,60,12],[340,130,60,12],
   ],
   spikes:[
     [100,278,280,12,'up'],
@@ -450,10 +444,11 @@ const LEVELS = [
     [0,0,480,20],  // ceiling = floor
     [0,290,480,30],// floor = ceiling (spikes!)
     [150,80,80,12],[280,80,80,12],
-    [150,230,80,12],[280,230,80,12],
+    [150,140,80,12],[280,140,80,12],
+    [150,200,80,12],[280,200,80,12],[360,210,60,12],
   ],
   spikes:[
-    [0,278,480,12,'up'],  // floor is deadly
+    [0,278,420,12,'up'],  // floor is deadly
     [100,0,280,14,'down'],
   ],
   movers:[
@@ -470,12 +465,10 @@ const LEVELS = [
   platforms:[
     [0,290,60,30],[420,290,60,30],
     [60,240,60,12],[180,200,60,12],[300,240,60,12],
-    [100,160,60,12],[240,120,60,12],[360,160,60,12],
+    [100,160,60,12],[240,120,60,12],[360,180,60,12],
   ],
   spikes:[
     [60,278,360,12,'up'],
-    [60,228,60,12,'down'],[180,188,60,12,'down'],[300,228,60,12,'down'],
-    [100,148,60,12,'down'],[240,108,60,12,'down'],[360,148,60,12,'down'],
   ],
   movers:[
     {x:60,y:240,w:60,h:12,ax:1,ay:0,range:60,speed:2},
@@ -486,18 +479,18 @@ const LEVELS = [
 // ── 10: Laser Maze ───────────────────────────────────────────
 {
   name:"Laser Maze",
-  spawn:[20,260],goal:{x:440,y:60,w:24,h:24},
+  spawn:[20,260],goal:{x:440,y:90,w:24,h:24},
   gravity:0.5,
   platforms:[
     [0,290,480,30],
-    [0,80,100,12],[380,80,100,12],
+    [0,230,100,12],[380,110,100,12],
     [160,200,60,12],[260,160,60,12],
   ],
   spikes:[
     [100,278,280,12,'up'],
   ],
   movers:[
-    {x:100,y:200,w:60,h:12,ax:1,ay:0,range:160,speed:2},
+    {x:100,y:230,w:60,h:12,ax:1,ay:0,range:160,speed:2},
   ],
   bounces:[],
   lasers:[
@@ -517,17 +510,15 @@ const LEVELS = [
     [80,140,20,12],[160,100,20,12],[240,140,20,12],[320,100,20,12],
   ],
   spikes:[
-    [0,278,80,12,'up'],[400,278,80,12,'up'],
-    [80,208,20,12,'down'],[160,168,20,12,'down'],[240,208,20,12,'down'],
-    [320,168,20,12,'down'],[380,208,20,12,'down'],
+    [100,278,80,12,'up'],[300,278,80,12,'up'],
   ],
   movers:[
     {x:100,y:260,w:40,h:12,ax:1,ay:0,range:280,speed:3.5},
   ],
   bounces:[],
   lasers:[
-    {x:40,y:0,w:8,h:280,ax:0,ay:1,range:0,speed:0},
-    {x:440,y:0,w:8,h:280,ax:0,ay:1,range:0,speed:0},
+    {x:40,y:0,w:8,h:260,ax:0,ay:1,range:0,speed:0},
+    {x:440,y:0,w:8,h:260,ax:0,ay:1,range:0,speed:0},
   ],
 },
 // ── 12: Chaos Theory ─────────────────────────────────────────
@@ -543,7 +534,6 @@ const LEVELS = [
   ],
   spikes:[
     [100,278,280,12,'up'],
-    [140,238,60,12,'down'],[240,198,60,12,'down'],[320,238,60,12,'down'],
   ],
   movers:[
     {x:100,y:180,w:60,h:12,ax:1,ay:0,range:100,speed:3},
@@ -561,18 +551,16 @@ const LEVELS = [
   spawn:[20,260],goal:{x:440,y:260,w:24,h:24},
   gravity:0.5,
   platforms:[
-    [0,290,60,30],[420,290,60,30],
-    [0,0,60,320],[420,0,60,320],  // side walls (not deadly)
+    [0,290,120,30],[420,290,60,30],
   ],
   spikes:[
-    [60,278,360,12,'up'],
+    [120,278,288,12,'up'],
     [60,0,360,14,'down'],
-    [60,0,12,290,'right'],[408,0,12,290,'right'],
   ],
   movers:[
-    {x:80,y:200,w:60,h:12,ax:1,ay:0,range:260,speed:2},
-    {x:80,y:140,w:60,h:12,ax:1,ay:0,range:260,speed:3},
-    {x:80,y:80,w:60,h:12,ax:1,ay:0,range:260,speed:4},
+    {x:80,y:230,w:60,h:12,ax:1,ay:0,range:260,speed:2},
+    {x:80,y:170,w:60,h:12,ax:1,ay:0,range:260,speed:3},
+    {x:80,y:110,w:60,h:12,ax:1,ay:0,range:260,speed:4},
   ],
   bounces:[],
   lasers:[
@@ -589,13 +577,12 @@ const LEVELS = [
     [0,0,480,20],
     [0,290,480,30],
     [100,80,60,12],[240,80,60,12],[360,80,60,12],
-    [100,220,60,12],[240,220,60,12],[360,220,60,12],
+    [100,210,60,12],[240,210,60,12],[360,210,60,12],
     [160,150,60,12],[280,150,60,12],
   ],
   spikes:[
     [0,278,480,12,'up'],
     [100,0,280,14,'down'],
-    [100,68,60,12,'up'],[240,68,60,12,'up'],[360,68,60,12,'up'],
   ],
   movers:[
     {x:100,y:130,w:60,h:12,ax:1,ay:0,range:120,speed:3},
@@ -614,13 +601,11 @@ const LEVELS = [
   platforms:[
     [0,290,60,30],[420,290,60,30],
     [60,240,60,12],[180,200,60,12],[300,240,60,12],
-    [60,160,60,12],[180,120,60,12],[300,160,60,12],
+    [60,180,60,12],[180,120,60,12],[300,180,60,12],
     [120,80,60,12],[240,40,60,12],[340,80,60,12],
   ],
   spikes:[
     [60,278,360,12,'up'],
-    [60,228,60,12,'down'],[180,188,60,12,'down'],[300,228,60,12,'down'],
-    [60,148,60,12,'down'],[180,108,60,12,'down'],[300,148,60,12,'down'],
     [0,0,60,14,'down'],[420,0,60,14,'down'],
   ],
   movers:[
@@ -745,6 +730,7 @@ function getAllPlatforms(){
   const lvl = LEVELS[currentLevel];
   const plats = [...(lvl.platforms||[])];
   movers.forEach(m => plats.push([m.x, m.y, m.w, m.h]));
+  (lvl.bounces||[]).forEach(b => plats.push(b));
   return plats;
 }
 
@@ -785,7 +771,7 @@ function updatePhysics(dt){
   // Gravity
   player.vy += gravity;
   if(Math.abs(lvl.gravity) > 0 && lvl.gravity < 0){
-    player.vy = Math.min(player.vy, 8);
+    player.vy = Math.min(player.vy, 10);
   } else {
     player.vy = Math.min(player.vy, 10);
   }
@@ -797,7 +783,7 @@ function updatePhysics(dt){
 
   // Jump
   if(player.jumpBuffer > 0 && player.coyoteTime > 0){
-    player.vy = lvl.gravity < 0 ? 5 : -8.5;
+    player.vy = lvl.gravity < 0 ? 8.5 : -8.5;
     player.coyoteTime = 0;
     player.jumpBuffer = 0;
     playSound('jump');
@@ -828,17 +814,17 @@ function updatePhysics(dt){
         player.y = p[1] - PH;
         player.vy = 0;
         player.onGround = true;
-        // Check bounce
-        const bounces = lvl.bounces||[];
-        for(const b of bounces){
-          if(rectOverlap(player.x,player.y,PW,PH, b[0],b[1],b[2],b[3])){
-            player.vy = lvl.gravity < 0 ? 9 : -12;
-            playSound('bounce');
-          }
+        const isBounce = (lvl.bounces||[]).some(b =>
+          b[0]===p[0] && b[1]===p[1] && b[2]===p[2] && b[3]===p[3]
+        );
+        if(isBounce){
+          player.vy = lvl.gravity < 0 ? 9 : -12;
+          playSound('bounce');
         }
       } else {
         player.y = p[1] + p[3];
         player.vy = 0;
+        if(lvl.gravity < 0) player.onGround = true;
       }
     }
   }
